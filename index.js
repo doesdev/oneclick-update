@@ -22,7 +22,6 @@ const jsonAuth = (token) => Object.assign(
 const simpleGet = (url, opts = {}) => new Promise((resolve, reject) => {
   const { redirect } = opts
   httpsGet(url, opts, (res) => {
-    console.log(url, res.statusCode)
     if (res.statusCode !== 302 || redirect === 'manual') return resolve(res)
     const location = res.headers.Location || res.headers.location
     return simpleGet(location, { redirect }).then(resolve)
@@ -46,10 +45,10 @@ const isPrivate = async (repo, token) => {
 const getConfig = async (configIn = {}) => {
   const config = Object.assign({}, configIn)
 
-  config.token = config.token || GITHUB_OAUTH_TOKEN
-  config.account = config.account || GITHUB_ACCOUNT
-  config.project = config.project || GITHUB_PROJECT
-  config.repo = config.repo || GITHUB_REPO
+  config.token = (config.token || GITHUB_OAUTH_TOKEN || '').trim()
+  config.account = (config.account || GITHUB_ACCOUNT || '').trim()
+  config.project = (config.project || GITHUB_PROJECT || '').trim()
+  config.repo = (config.repo || GITHUB_REPO || '').trim()
 
   if (!config.repo) {
     if (!(config.account && config.project)) throw new Error(`Repo is required`)
