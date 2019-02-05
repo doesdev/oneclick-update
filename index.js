@@ -91,7 +91,7 @@ const getConfig = async (configIn = {}) => {
   return config
 }
 
-const getLatestRelease = async (config) => {
+const getReleaseList = async (config) => {
   try {
     config = await getConfig(config)
   } catch (ex) {
@@ -109,4 +109,4 @@ const getLatestRelease = async (config) => {
   return Promise.resolve(releases)
 }
 
-module.exports = { getLatestRelease }
+module.exports = { getReleaseList }
