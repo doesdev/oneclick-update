@@ -1,7 +1,7 @@
 'use strict'
 
 const { getLatestRelease } = require('./index')
-const repo = `doesdev/scrud`
+const repo = `atom/atom`
 const config = { repo }
 
 const start = (msg) => process.stdout.write(`${msg}\n`)
@@ -31,7 +31,10 @@ const test = (msg, isTruthyOrCompA, compB) => {
 const runTests = async () => {
   start('Starting oneclick-update tests')
 
-  test('getLatestRelease gets list of releases', await getLatestRelease(config))
+  let result
+
+  result = await getLatestRelease(config)
+  test('getLatestRelease gets list of releases', Array.isArray(result))
 
   finish()
 }
