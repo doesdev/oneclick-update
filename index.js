@@ -10,14 +10,13 @@ const {
   GITHUB_OAUTH_TOKEN
 } = process.env
 
-const uaHeader = () => ({ 'User-Agent': `oneclick-update` })
-const authHeader = (token) => ({ Authorization: `token ${token}` })
-const jsonHeader = () => ({ Accept: `application/json` })
-const jsonAuth = (token) => Object.assign(
-  authHeader(token),
-  jsonHeader(),
-  uaHeader()
-)
+const hdrUa = { 'User-Agent': `oneclick-update` }
+const hdrJson = { Accept: `application/json` }
+const uaJsonHeader = Object.assign(hdrUa, hdrJson)
+
+const setUaJson = (h) => Object.assign(h, hdrUa, hdrJson)
+const getAuthHeader = (token) => ({ Authorization: `token ${token}` })
+const getAuthHeaderJson = (token) => setUaJson(getAuthHeader(token))
 
 const simpleGet = (url, opts = {}) => new Promise((resolve, reject) => {
   const { redirect } = opts
@@ -31,11 +30,11 @@ const simpleGet = (url, opts = {}) => new Promise((resolve, reject) => {
 const isPrivate = async (repo, token) => {
   const url = `https://api.github.com/repos/${repo}`
 
-  const res = await simpleGet(url)
+  const res = await simpleGet(url, { headers: uaJsonHeader })
   if (res.statusCode === 200) return { private: false }
 
   if (token) {
-    const privRes = await simpleGet(url, { headers: jsonAuth(token) })
+    const privRes = await simpleGet(url, { headers: getAuthHeaderJson(token) })
     if (privRes.statusCode === 200) return { private: true }
   }
 
