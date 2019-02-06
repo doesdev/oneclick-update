@@ -80,8 +80,8 @@ const getConfig = async (configIn = {}) => {
     config.repo = `${config.account}/${config.project}`
   }
 
-  if (config.repo.indexOf('https://github.com/') !== -1) {
-    config.repo = config.repo.replace('https://github.com/', '')
+  if (config.repo.indexOf('github.com/') !== -1) {
+    config.repo = config.repo.replace(/.*github.com\//, '')
   }
 
   if (repos[config.repo]) return config
