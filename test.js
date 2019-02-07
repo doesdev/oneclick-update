@@ -1,7 +1,7 @@
 'use strict'
 
 const { getReleaseList } = require('./index')
-const repo = `atom/atom`
+const repo = `doesdev/oneclick-release-test`
 const config = { repo }
 
 let secrets
@@ -48,7 +48,10 @@ const runTests = async () => {
   result = await getReleaseList(secrets)
   test('getReleaseList works with private repos', Array.isArray(result))
 
+  result = await getReleaseList({ repo: `https://github.com/atom/atom` })
+  test('getReleaseList strips github url from repo', Array.isArray(result))
+
   finish()
 }
 
-runTests()
+runTests().catch(fail)
