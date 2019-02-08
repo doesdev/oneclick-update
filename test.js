@@ -2,17 +2,18 @@
 
 const { getReleaseList, latestByChannel } = require('./index')
 const repo = `doesdev/oneclick-release-test`
-const config = { repo }
+const fullUrlRepo = `https://github.com/doesdev/oneclick-release-test`
 
 let secrets
 try {
   secrets = require('./secrets.json')
-  config.token = secrets.token
 } catch (ex) {
   const err = `Tests require secrets.json file with private repo and token`
   console.error(err)
   process.exit(1)
 }
+const config = { repo, token: secrets.token }
+const fullUrlConfig = Object.assign({}, config, { repo: fullUrlRepo })
 
 const start = (msg) => process.stdout.write(`${msg}\n`)
 
@@ -25,7 +26,7 @@ const finish = () => {
 let run = 0
 const fail = (err) => {
   console.log('\n')
-  console.error(err)
+  console.error(err instanceof Error ? err : new Error(`Fail: ${err}`))
   return process.exit(1)
 }
 
@@ -36,6 +37,7 @@ const test = (msg, isTruthyOrCompA, compB) => {
   process.stdout.clearLine()
   process.stdout.cursorTo(0)
   process.stdout.write(`${run} test have passed`)
+  return true
 }
 
 const runTests = async () => {
@@ -43,19 +45,25 @@ const runTests = async () => {
 
   let result
 
-  result = await getReleaseList(config)
-  test('getReleaseList gets list of recent releases', Array.isArray(result))
+  test('getReleaseList gets list of recent releases',
+    Array.isArray(await getReleaseList(config))
+  )
 
-  result = await getReleaseList(secrets)
-  test('getReleaseList works with private repos', Array.isArray(result))
+  test('getReleaseList works with private repos',
+    Array.isArray(await getReleaseList(secrets))
+  )
 
-  const fullUrl = `https://github.com/atom/atom`
-  const fullUrlConfig = Object.assign({}, config, { repo: fullUrl })
-  result = await getReleaseList(fullUrlConfig)
-  test('getReleaseList strips github url from repo', Array.isArray(result))
+  test('getReleaseList strips github url from repo',
+    Array.isArray(await getReleaseList(fullUrlConfig))
+  )
 
-  result = typeof (await latestByChannel(config))
-  test('latestByChannel gets latest for all channels', result, 'object')
+  result = await latestByChannel(config)
+
+  test('latestByChannel gets latest for all channels', (
+    test(`channels are of expected type`, typeof result, 'object') &&
+    test(`channel parsed from build metadata exists`, !!result['vendor-a']) &&
+    test(`prerelease channel exists`, !!result.prerelease)
+  ))
 
   finish()
 }

@@ -146,7 +146,8 @@ const latestByChannel = async (config) => {
     if (!cleanTag) return
 
     const tagMeta = tag.indexOf('+') >= 0 ? tag.slice(tag.indexOf('+') + 1) : ''
-    const [tagPre] = semver.prerelease(r.tag) || []
+    const tagPreAry = semver.prerelease(cleanTag) || []
+    const tagPre = tagPreAry.find((p) => Number.isNaN(+p))
     const rlsPre = r.prerelease ? `prerelease` : null
 
     const channel = [tagMeta, tagPre, rlsPre].filter((c) => c).join('/')
