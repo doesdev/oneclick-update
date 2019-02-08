@@ -1,12 +1,13 @@
 'use strict'
 
-const { getReleaseList } = require('./index')
+const { getReleaseList, latestByChannel } = require('./index')
 const repo = `doesdev/oneclick-release-test`
 const config = { repo }
 
 let secrets
 try {
   secrets = require('./secrets.json')
+  config.token = secrets.token
 } catch (ex) {
   const err = `Tests require secrets.json file with private repo and token`
   console.error(err)
@@ -22,9 +23,9 @@ const finish = () => {
 }
 
 let run = 0
-const fail = (msg) => {
+const fail = (err) => {
   console.log('\n')
-  console.error(new Error(`Fail - ${msg}`))
+  console.error(err)
   return process.exit(1)
 }
 
@@ -48,8 +49,13 @@ const runTests = async () => {
   result = await getReleaseList(secrets)
   test('getReleaseList works with private repos', Array.isArray(result))
 
-  result = await getReleaseList({ repo: `https://github.com/atom/atom` })
+  const fullUrl = `https://github.com/atom/atom`
+  const fullUrlConfig = Object.assign({}, config, { repo: fullUrl })
+  result = await getReleaseList(fullUrlConfig)
   test('getReleaseList strips github url from repo', Array.isArray(result))
+
+  result = typeof (await latestByChannel(config))
+  test('latestByChannel gets latest for all channels', result, 'object')
 
   finish()
 }
