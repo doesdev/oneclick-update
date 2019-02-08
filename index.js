@@ -100,11 +100,11 @@ const getConfig = async (configIn = {}) => {
 
   repos[config.repo] = await isPrivate(config.repo, config.token)
 
-  if (repos[config.repo].isPrivate && !config.serverUrl) {
-    let msg = `For private repos we recommend setting serverUrl / SERVER_URL`
-    msg += ` - If not set we will try to extract that info from each request`
-    msg += ` - That isn't guaranteed to produce the correct return URL`
-    msg += ` - That also adds overhead to each request`
+  if (repos[config.repo].private && !config.serverUrl) {
+    let msg = `\nFor private repos we recommend setting serverUrl / SERVER_URL\n`
+    msg += ` - If not set we will try to extract that info from each request\n`
+    msg += ` - That isn't guaranteed to produce the correct return URL\n`
+    msg += ` - That also adds overhead to each request\n`
     console.log(msg)
   }
 
@@ -182,7 +182,7 @@ const requestHandler = async (config) => {
   return (req, res) => {
     const path = req.url.slice(1)
 
-    if (repo.isPrivate && !serverUrl) {
+    if (repo.private && !serverUrl) {
       const host = req.headers.host
       const { socket } = req
       const unsecure = socket.localPort === 80 || socket.remotePort === 80
