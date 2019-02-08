@@ -8,7 +8,8 @@ const {
   GITHUB_ACCOUNT,
   GITHUB_PROJECT,
   GITHUB_REPO,
-  GITHUB_OAUTH_TOKEN
+  GITHUB_OAUTH_TOKEN,
+  SERVER_URL
 } = process.env
 
 const hdrUa = { 'User-Agent': `oneclick-update` }
@@ -80,6 +81,7 @@ const getConfig = async (configIn = {}) => {
   if (repos[configIn.repos]) return configIn
 
   const config = Object.assign({}, configIn)
+  config.serverUrl = (config.serverUrl || SERVER_URL || '').trim()
   config.token = (config.token || GITHUB_OAUTH_TOKEN || '').trim()
   config.account = (config.account || GITHUB_ACCOUNT || '').trim()
   config.project = (config.project || GITHUB_PROJECT || '').trim()
@@ -97,6 +99,14 @@ const getConfig = async (configIn = {}) => {
   if (repos[config.repo]) return config
 
   repos[config.repo] = await isPrivate(config.repo, config.token)
+
+  if (repos[config.repo].isPrivate && !config.serverUrl) {
+    let msg = `For private repos we recommend setting serverUrl / SERVER_URL`
+    msg += ` - If not set we will try to extract that info from each request`
+    msg += ` - That isn't guaranteed to produce the correct return URL`
+    msg += ` - That also adds overhead to each request`
+    console.log(msg)
+  }
 
   return config
 }
@@ -157,4 +167,40 @@ const latestByChannel = async (config) => {
   return channels
 }
 
-module.exports = { getReleaseList, latestByChannel }
+const requestHandler = async (config) => {
+  try {
+    config = await getConfig(config)
+  } catch (ex) {
+    return Promise.reject(ex)
+  }
+
+  const channels = await latestByChannel(config)
+  const { repo } = config
+
+  let { serverUrl } = config
+
+  return (req, res) => {
+    const path = req.url.slice(1)
+
+    if (repo.isPrivate && !serverUrl) {
+      const host = req.headers.host
+      const { socket } = req
+      const unsecure = socket.localPort === 80 || socket.remotePort === 80
+
+      if (!host) {
+        const err = new Error('Unable to determine serverUrl for private repo')
+        console.error(err)
+
+        req.statusCode = 204
+        return req.end()
+      }
+
+      serverUrl = `${unsecure ? 'http' : 'https'}://${host}`
+    }
+
+    const isUpdate = !path.indexOf('update')
+    console.log(isUpdate, serverUrl, channels.length)
+  }
+}
+
+module.exports = { getReleaseList, latestByChannel, requestHandler }
