@@ -144,7 +144,7 @@ const latestByChannel = async (config) => {
   const channels = repos[repo].channels = repos[repo].channels || {}
 
   const setLatestForChannel = (release, channel) => {
-    channel = channel.toLowerCase()
+    release.channel = channel = channel.toLowerCase()
     const currentTag = (channels[channel] || {}).tag_name
     if (currentTag && semver.gt(currentTag, release.tag_name)) return
     channels[channel] = release
@@ -186,9 +186,30 @@ const getPlatformUrl = () => {}
 
 const getUpdateUrl = () => {}
 
+const getReleasesUrl = () => {}
+
 const getDownloadUrl = () => {}
 
 const redirectToUrl = () => {}
+
+const getChannel = (repo, channels, pathLower) => {
+  if (repo.pathToChannel[pathLower]) return repo.pathToChannel[pathLower]
+
+  let channel
+  Object.entries(channels).forEach(([channelName, release]) => {
+    if (!channelName || pathLower.indexOf(channelName) === -1) return
+    if (!channel) return (channel = release)
+
+    const useCurrent = channel.split('/').length > release.split('/').length
+    channel = useCurrent ? channel : release
+  })
+
+  channel = channel || channels['']
+  repo.pathToChannel = repo.pathToChannel || {}
+  repo.pathToChannel[pathLower] = channel
+
+  return channel
+}
 
 const requestHandler = async (config) => {
   try {
@@ -202,8 +223,14 @@ const requestHandler = async (config) => {
 
   let { serverUrl } = config
 
+  const noContent = (res) => {
+    res.statusCode = 204
+    return res.end()
+  }
+
   return (req, res) => {
-    const path = req.url.slice(1)
+    const path = req.url
+    const pathLower = path.toLowerCase()
 
     if (repo.private && !serverUrl) {
       const host = req.headers.host
@@ -214,15 +241,20 @@ const requestHandler = async (config) => {
         const err = new Error('Unable to determine serverUrl for private repo')
         console.error(err)
 
-        req.statusCode = 204
-        return req.end()
+        return noContent(res)
       }
 
       serverUrl = `${unsecure ? 'http' : 'https'}://${host}`
     }
 
-    const isUpdate = !path.indexOf('update')
-    console.log(isUpdate, serverUrl, channels.length)
+    const isUpdate = !path.indexOf('/update')
+    const isRelease = path.indexOf('/RELEASES') !== -1
+
+    const channel = getChannel(repo, channels, pathLower)
+
+    if (!channel) return noContent(res)
+
+    console.log(isUpdate, serverUrl, channels.length, isRelease, channel)
     /* ROUTES
       /
       /download[/channel]
@@ -240,6 +272,7 @@ module.exports = {
   guessPlatform,
   getPlatformUrl,
   getUpdateUrl,
+  getReleasesUrl,
   getDownloadUrl,
   redirectToUrl
 }
