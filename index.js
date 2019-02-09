@@ -257,11 +257,30 @@ const firstForArch = (assets, arch) => {
 }
 
 const platformFilters = {
-  win32: (assets, action = 'download', arch) => {
-    if (action === 'download') {
-      if ((assets = filterByExt(assets, 'exe')).length < 1) return assets[0]
+  win32: (assets, action = 'download', arch, ext) => {
+    const download = () => {
+      ext = ext || 'exe'
+      if ((assets = filterByExt(assets, ext)).length < 2) return assets[0]
       return firstForArch(assets, arch)
     }
+
+    const update = () => {
+      ext = ext || 'zip'
+      if ((assets = filterByExt(assets, ext)).length < 1) return download()
+
+      assets = assets.filter((a) => a.name.match(/windows|win32|win64/i))
+      return firstForArch(assets, arch)
+    }
+
+    const release = () => {
+      assets = assets.filter((a) => !a.name.indexOf('RELEASES'))
+      if ((assets = filterByExt(assets, ext)).length < 2) return assets[0]
+      return firstForArch(assets, arch)
+    }
+
+    const actions = { download, update, release }
+
+    return actions[action] ? actions[action]() : null
   }
 }
 
@@ -298,7 +317,8 @@ const requestHandler = async (config) => {
   }
 
   return (req, res) => {
-    const { headers, url: path } = req
+    const { headers } = req
+    const [path] = req.url.split('?')
     const pathLower = path.toLowerCase()
 
     if (repo.private && !serverUrl) {
