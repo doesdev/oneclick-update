@@ -99,6 +99,7 @@ const getConfig = async (configIn = {}) => {
   if (repos[config.repo]) return config
 
   repos[config.repo] = await isPrivate(config.repo, config.token)
+  repos[config.repo].cacheByPath = { channel: {}, platform: {} }
 
   if (repos[config.repo].private && !config.serverUrl) {
     let msg = `\nFor private repos we recommend setting serverUrl / SERVER_URL\n`
@@ -192,7 +193,8 @@ const getDownloadUrl = () => {}
 const redirectToUrl = () => {}
 
 const getChannel = (repo, channels, pathLower) => {
-  if (repo.pathToChannel[pathLower]) return repo.pathToChannel[pathLower]
+  const cached = repo.cacheByPath.channel[pathLower]
+  if (cached) return cached
 
   let channel
   Object.entries(channels).forEach(([channelName, release]) => {
@@ -204,10 +206,22 @@ const getChannel = (repo, channels, pathLower) => {
   })
 
   channel = channel || channels['']
-  repo.pathToChannel = repo.pathToChannel || {}
-  repo.pathToChannel[pathLower] = channel
+  repo.cacheByPath.channel[pathLower] = channel
 
   return channel
+}
+
+const getPlatform = (repo, pathLower, channel, headers) => {
+  const cached = repo.cacheByPath.platform[pathLower]
+  if (cached) return cached
+
+  let tmpPath = pathLower.replace(/^\/download|update/, '')
+  if (channel.channel) tmpPath = tmpPath.replace(`/${channel.channel}`, '')
+
+  const platform = tmpPath.split('/')[1] || guessPlatform(headers['user-agent'])
+  repo.cacheByPath.platform[pathLower] = platform
+
+  return platform
 }
 
 const requestHandler = async (config) => {
@@ -218,7 +232,7 @@ const requestHandler = async (config) => {
   }
 
   const channels = await latestByChannel(config)
-  const { repo } = config
+  const repo = repos[config.repo]
 
   let { serverUrl } = config
 
@@ -252,14 +266,15 @@ const requestHandler = async (config) => {
 
     if (!channel) return noContent(res)
 
-    let tmpPath = pathLower.replace(/^\/[download|update]/, '')
-    if (channel.channel) tmpPath = pathLower.replace(channel.channel, '')
-
-    let platform = tmpPath.split('/')[1] || guessPlatform(headers['user-agent'])
+    const platform = getPlatform(repo, pathLower, channel, headers)
 
     if (!platform) return noContent(res)
 
-    console.log(isUpdate, serverUrl, channels.length, isRelease, tmpPath)
+    console.log('isUpdate', isUpdate)
+    console.log('serverUrl', serverUrl)
+    console.log('isRelease', isRelease)
+    console.log('channel.channel', channel.channel)
+    console.log('platform', platform)
     /* ROUTES
       /
       /download[/channel]
