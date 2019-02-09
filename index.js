@@ -196,7 +196,8 @@ const getChannel = (repo, channels, pathLower) => {
     if (!channelName || pathLower.indexOf(channelName) === -1) return
     if (!channel) return (channel = release)
 
-    const useCurrent = channel.split('/').length > channelName.split('/').length
+    const slashLen = (name) => name.split('/').length
+    const useCurrent = slashLen(channel.channel) > slashLen(channelName)
     channel = useCurrent ? channel : release
   })
 
@@ -277,11 +278,16 @@ const requestHandler = async (config) => {
 
     if (!platform) return noContent(res)
 
-    console.log('isUpdate', isUpdate)
-    console.log('serverUrl', serverUrl)
-    console.log('isRelease', isRelease)
-    console.log('channel.tag_name', channel.tag_name)
-    console.log('platform', platform)
+    res.setHeader('Content-Type', 'application/json')
+    const tmpObj = {
+      isUpdate,
+      isRelease,
+      serverUrl,
+      channel: channel.channel,
+      tag: channel.tag_name,
+      platform
+    }
+    res.end(JSON.stringify(tmpObj, null, 2))
     /* ROUTES
       /
       /download[/channel]
