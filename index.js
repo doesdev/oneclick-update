@@ -86,7 +86,6 @@ const getConfig = async (configIn = {}) => {
   config.account = (config.account || GITHUB_ACCOUNT || '').trim()
   config.project = (config.project || GITHUB_PROJECT || '').trim()
   config.repo = (config.repo || GITHUB_REPO || '').trim()
-  config.platformHandlers = config.platformHandlers || {}
 
   if (!config.repo) {
     if (!(config.account && config.project)) throw new Error(`Repo is required`)
@@ -229,22 +228,21 @@ const requestHandler = async (config) => {
   }
 
   return (req, res) => {
-    const path = req.url
+    const { headers, url: path } = req
     const pathLower = path.toLowerCase()
 
     if (repo.private && !serverUrl) {
-      const host = req.headers.host
       const { socket } = req
       const unsecure = socket.localPort === 80 || socket.remotePort === 80
 
-      if (!host) {
+      if (!headers.host) {
         const err = new Error('Unable to determine serverUrl for private repo')
         console.error(err)
 
         return noContent(res)
       }
 
-      serverUrl = `${unsecure ? 'http' : 'https'}://${host}`
+      serverUrl = `${unsecure ? 'http' : 'https'}://${headers.host}`
     }
 
     const isUpdate = !path.indexOf('/update')
@@ -254,7 +252,14 @@ const requestHandler = async (config) => {
 
     if (!channel) return noContent(res)
 
-    console.log(isUpdate, serverUrl, channels.length, isRelease, channel)
+    let tmpPath = pathLower.replace(/^\/[download|update]/, '')
+    if (channel.channel) tmpPath = pathLower.replace(channel.channel, '')
+
+    let platform = tmpPath.split('/')[1] || guessPlatform(headers['user-agent'])
+
+    if (!platform) return noContent(res)
+
+    console.log(isUpdate, serverUrl, channels.length, isRelease, tmpPath)
     /* ROUTES
       /
       /download[/channel]
