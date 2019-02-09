@@ -86,6 +86,7 @@ const getConfig = async (configIn = {}) => {
   config.account = (config.account || GITHUB_ACCOUNT || '').trim()
   config.project = (config.project || GITHUB_PROJECT || '').trim()
   config.repo = (config.repo || GITHUB_REPO || '').trim()
+  config.platformHandlers = config.platformHandlers || {}
 
   if (!config.repo) {
     if (!(config.account && config.project)) throw new Error(`Repo is required`)
@@ -167,6 +168,28 @@ const latestByChannel = async (config) => {
   return channels
 }
 
+const guessPlatform = (ua = '') => {
+  let platform, arch
+  const uaPlatform = ((ua.match(/\((.+?)\)/) || [])[1] || '').toLowerCase()
+
+  if (!uaPlatform) return { platform, arch }
+
+  if (uaPlatform.indexOf('windows') !== -1) platform = 'win32'
+  else if (uaPlatform.indexOf('mac') !== -1) platform = 'darwin'
+
+  arch = uaPlatform.indexOf('64') !== -1 ? 'x64' : 'x32'
+
+  return { platform, arch }
+}
+
+const getPlatformUrl = () => {}
+
+const getUpdateUrl = () => {}
+
+const getDownloadUrl = () => {}
+
+const redirectToUrl = () => {}
+
 const requestHandler = async (config) => {
   try {
     config = await getConfig(config)
@@ -200,7 +223,23 @@ const requestHandler = async (config) => {
 
     const isUpdate = !path.indexOf('update')
     console.log(isUpdate, serverUrl, channels.length)
+    /* ROUTES
+      /
+      /download[/channel]
+      /download[/channel]/:platform
+      /update[/channel]/:platform/:version
+      /update[/channel]/win32/:version/RELEASES
+    */
   }
 }
 
-module.exports = { getReleaseList, latestByChannel, requestHandler }
+module.exports = {
+  getReleaseList,
+  latestByChannel,
+  requestHandler,
+  guessPlatform,
+  getPlatformUrl,
+  getUpdateUrl,
+  getDownloadUrl,
+  redirectToUrl
+}
