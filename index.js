@@ -99,7 +99,7 @@ const getConfig = async (configIn = {}) => {
   if (repos[config.repo]) return config
 
   repos[config.repo] = await isPrivate(config.repo, config.token)
-  repos[config.repo].cacheByPath = { channel: {}, platform: {} }
+  repos[config.repo].cacheByPath = { channel: {}, platform: {}, serverUrl: {} }
 
   if (repos[config.repo].private && !config.serverUrl) {
     let msg = `\nFor private repos we recommend setting serverUrl / SERVER_URL\n`
@@ -219,6 +219,21 @@ const getPlatform = (repo, pathLower, channel, headers) => {
   return platform
 }
 
+const getServerUrl = (repo, pathLower, req) => {
+  const cached = repo.cacheByPath.serverUrl[pathLower]
+  if (cached) return cached
+
+  const { socket } = req
+  const unsecure = socket.localPort === 80 || socket.remotePort === 80
+
+  if (!req.headers.host) return
+
+  const serverUrl = `${unsecure ? 'http' : 'https'}://${req.headers.host}`
+  repo.cacheByPath.serverUrl[pathLower] = serverUrl
+
+  return serverUrl
+}
+
 const requestHandler = async (config) => {
   try {
     config = await getConfig(config)
@@ -241,17 +256,14 @@ const requestHandler = async (config) => {
     const pathLower = path.toLowerCase()
 
     if (repo.private && !serverUrl) {
-      const { socket } = req
-      const unsecure = socket.localPort === 80 || socket.remotePort === 80
+      serverUrl = getServerUrl(repo, pathLower, req)
 
-      if (!headers.host) {
+      if (!serverUrl) {
         const err = new Error('Unable to determine serverUrl for private repo')
         console.error(err)
 
         return noContent(res)
       }
-
-      serverUrl = `${unsecure ? 'http' : 'https'}://${headers.host}`
     }
 
     const isUpdate = !path.indexOf('/update')
