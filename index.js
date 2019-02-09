@@ -200,7 +200,7 @@ const getChannel = (repo, channels, pathLower) => {
     if (!channelName || pathLower.indexOf(channelName) === -1) return
     if (!channel) return (channel = release)
 
-    const useCurrent = channel.split('/').length > release.split('/').length
+    const useCurrent = channel.split('/').length > channelName.split('/').length
     channel = useCurrent ? channel : release
   })
 
