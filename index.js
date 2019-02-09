@@ -77,6 +77,10 @@ const isPrivate = async (repo, token) => {
   throw new GithubApiError(`Repo not found on Github: ${repo}`, res)
 }
 
+const initCacheForRepo = (repo) => {
+  repo.cacheByPath = { channel: {}, platform: {}, serverUrl: {} }
+}
+
 const getConfig = async (configIn = {}) => {
   if (repos[configIn.repos]) return configIn
 
@@ -86,6 +90,7 @@ const getConfig = async (configIn = {}) => {
   config.account = (config.account || GITHUB_ACCOUNT || '').trim()
   config.project = (config.project || GITHUB_PROJECT || '').trim()
   config.repo = (config.repo || GITHUB_REPO || '').trim()
+  config.platformFilters = config.platformFilters || {}
 
   if (!config.repo) {
     if (!(config.account && config.project)) throw new Error(`Repo is required`)
@@ -99,7 +104,7 @@ const getConfig = async (configIn = {}) => {
   if (repos[config.repo]) return config
 
   repos[config.repo] = await isPrivate(config.repo, config.token)
-  repos[config.repo].cacheByPath = { channel: {}, platform: {}, serverUrl: {} }
+  initCacheForRepo(repos[config.repo])
 
   if (repos[config.repo].private && !config.serverUrl) {
     let msg = `\nFor private repos we recommend setting serverUrl / SERVER_URL\n`
@@ -235,6 +240,46 @@ const getServerUrl = (repo, pathLower, req) => {
   return serverUrl
 }
 
+const filterByExt = (assets, ext) => {
+  ext = ext.charAt(0) === '.' ? ext : `.${ext}`
+  const extLen = ext.length
+  return assets.filter((a) => a.name.indexOf(ext) === a.name.length - extLen)
+}
+
+const firstForArch = (assets, arch) => {
+  assets.sort((a, b) => {
+    a = a.name.indexOf('64') === -1 ? -1 : 1
+    b = b.name.indexOf('64') === -1 ? -1 : 1
+    return a - b
+  })
+
+  return arch === 'x64' ? assets[assets.length - 1] : assets[0]
+}
+
+const platformFilters = {
+  win32: (assets, action = 'download', arch) => {
+    if (action === 'download') {
+      if ((assets = filterByExt(assets, 'exe')).length < 1) return assets[0]
+      return firstForArch(assets, arch)
+    }
+  }
+}
+
+const getPlatformAsset = (config, repo, channel, platform, action, arch) => {
+  const assets = channel.assets.slice(0)
+  let asset
+
+  if (!config.platformFilters[platform] && !platformFilters[platform]) return
+
+  if (config.platformFilters && config.platformFilters[platform]) {
+    asset = config.platformFilters[platform](assets, action, arch)
+  }
+
+  asset = asset || platformFilters[platform](assets, action, arch)
+
+  return asset
+}
+
 const requestHandler = async (config) => {
   try {
     config = await getConfig(config)
@@ -269,6 +314,7 @@ const requestHandler = async (config) => {
 
     const isUpdate = !path.indexOf('/update')
     const isRelease = path.indexOf('/RELEASES') !== -1
+    const action = isUpdate ? 'update' : (isRelease ? 'release' : 'download')
 
     const channel = getChannel(repo, channels, pathLower)
 
@@ -278,14 +324,16 @@ const requestHandler = async (config) => {
 
     if (!platform) return noContent(res)
 
+    const asset = getPlatformAsset(config, repo, channel, platform, action)
+
     res.setHeader('Content-Type', 'application/json')
     const tmpObj = {
-      isUpdate,
-      isRelease,
+      action,
       serverUrl,
       channel: channel.channel,
       tag: channel.tag_name,
-      platform
+      platform,
+      asset
     }
     res.end(JSON.stringify(tmpObj, null, 2))
     /* ROUTES
