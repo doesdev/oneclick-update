@@ -169,17 +169,12 @@ const latestByChannel = async (config) => {
 }
 
 const guessPlatform = (ua = '') => {
-  let platform, arch
   const uaPlatform = ((ua.match(/\((.+?)\)/) || [])[1] || '').toLowerCase()
 
-  if (!uaPlatform) return { platform, arch }
+  if (uaPlatform && uaPlatform.indexOf('windows') !== -1) return 'win32'
+  if (uaPlatform && uaPlatform.indexOf('mac') !== -1) return 'darwin'
 
-  if (uaPlatform.indexOf('windows') !== -1) platform = 'win32'
-  else if (uaPlatform.indexOf('mac') !== -1) platform = 'darwin'
-
-  arch = uaPlatform.indexOf('64') !== -1 ? 'x64' : 'x32'
-
-  return { platform, arch }
+  return null
 }
 
 const getPlatformUrl = () => {}
@@ -273,7 +268,7 @@ const requestHandler = async (config) => {
     console.log('isUpdate', isUpdate)
     console.log('serverUrl', serverUrl)
     console.log('isRelease', isRelease)
-    console.log('channel.channel', channel.channel)
+    console.log('channel.tag_name', channel.tag_name)
     console.log('platform', platform)
     /* ROUTES
       /
