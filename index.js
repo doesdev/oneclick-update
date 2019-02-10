@@ -182,16 +182,6 @@ const guessPlatform = (ua = '') => {
   return null
 }
 
-const getPlatformUrl = () => {}
-
-const getUpdateUrl = () => {}
-
-const getReleasesUrl = () => {}
-
-const getDownloadUrl = () => {}
-
-const redirectToUrl = () => {}
-
 const getChannel = (repo, channels, pathLower) => {
   const cached = repo.cacheByPath.channel[pathLower]
   if (cached) return cached
@@ -384,11 +374,5 @@ const requestHandler = async (config) => {
 module.exports = {
   getReleaseList,
   latestByChannel,
-  requestHandler,
-  guessPlatform,
-  getPlatformUrl,
-  getUpdateUrl,
-  getReleasesUrl,
-  getDownloadUrl,
-  redirectToUrl
+  requestHandler
 }
