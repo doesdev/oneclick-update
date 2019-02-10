@@ -78,6 +78,7 @@ const isPrivate = async (repo, token) => {
 }
 
 const initCacheForRepo = (repo) => {
+  repo.resetCache = () => initCacheForRepo(repo)
   repo.cacheByPath = { channel: {}, platform: {}, serverUrl: {} }
 }
 
@@ -209,8 +210,10 @@ const getPlatform = (repo, pathLower, channel, headers) => {
   let tmpPath = pathLower.replace(/^\/download|update/, '')
   if (channel.channel) tmpPath = tmpPath.replace(`/${channel.channel}`, '')
 
-  const platform = tmpPath.split('/')[1] || guessPlatform(headers['user-agent'])
-  repo.cacheByPath.platform[pathLower] = platform
+  const pathPlatform = tmpPath.split('/')[1]
+  const platform = pathPlatform || guessPlatform(headers['user-agent'])
+
+  if (pathPlatform) repo.cacheByPath.platform[pathLower] = platform
 
   return platform
 }
@@ -290,6 +293,7 @@ const platformFilters = {
 }
 
 const getPlatformAsset = (config, repo, channel, platform, action, arch) => {
+  // const cached = repo.cacheByPath.platformAsset[pathLower]
   const assets = channel.assets.slice(0)
   let asset
 
