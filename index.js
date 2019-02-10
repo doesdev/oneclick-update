@@ -264,21 +264,36 @@ const platformFilters = {
       return firstForArch(assets, arch)
     }
 
-    const update = () => {
-      ext = ext || 'zip'
-      if ((assets = filterByExt(assets, ext)).length < 1) return download()
-
-      assets = assets.filter((a) => a.name.match(/windows|win32|win64/i))
-      return firstForArch(assets, arch)
-    }
-
     const release = () => {
       assets = assets.filter((a) => !a.name.indexOf('RELEASES'))
       if ((assets = filterByExt(assets, ext)).length < 2) return assets[0]
       return firstForArch(assets, arch)
     }
 
-    const actions = { download, update, release }
+    const actions = { download, update: download, release }
+
+    return actions[action] ? actions[action]() : null
+  },
+  darwin: (assets, action = 'download', arch, ext = 'dmg') => {
+    const download = () => {
+      let asset
+      if (ext === 'dmg' && (asset = filterByExt(assets, 'dmg')[0])) return asset
+
+      if ((assets = filterByExt(assets, 'zip')).length < 2) return assets[1]
+
+      assets = assets.filter((a) => a.name.match(/mac|osx|darwin/i))
+
+      if (assets.length < 2) return assets[0]
+
+      return assets.filter((a) => a.name.indexOf('symbols') === -1)[0]
+    }
+
+    const update = () => {
+      ext = 'zip'
+      return download()
+    }
+
+    const actions = { download, update }
 
     return actions[action] ? actions[action]() : null
   }
