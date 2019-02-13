@@ -63,11 +63,11 @@ const testAsync = async (msg, promise) => {
 const runTests = async () => {
   start('Starting oneclick-update tests')
 
-  let result
-
   for (const type of ['public', 'private']) {
     const isPublic = type === 'public'
     const config = isPublic ? publicConfig : secrets
+    const metaChannel = isPublic ? 'vendor-a' : null
+    const preChannel = isPublic ? 'prerelease' : null
 
     test(`[${type}] getReleaseList gets list of recent releases`,
       Array.isArray(await getReleaseList(config))
@@ -77,63 +77,70 @@ const runTests = async () => {
       Array.isArray(await getReleaseList(fullUrlConfig(config)))
     )
 
-    result = await latestByChannel(config)
+    await testAsync(`[${type}] latestByChannel`, async () => {
+      const result = await latestByChannel(config)
 
-    test(`[${type}] latestByChannel gets latest for all channels`, (
-      test(`[${type}] channels are of expected type`,
-        typeof result,
-        'object'
-      ) &&
-      test(`[${type}] channel parsed from build metadata exists`,
-        !isPublic || !!result['vendor-a']
-      ) &&
-      test(`[${type}] prerelease channel exists`,
-        !isPublic || !!result.prerelease
-      )
-    ))
+      test(`[${type}] channels are of expected type`, typeof result, 'object')
 
-    await testAsync(`[${type}] requestHandler download/win32 works`, async () => {
-      const server = http.createServer(await requestHandler(config))
-      await new Promise((resolve, reject) => server.listen(resolve))
-      const port = server.address().port
-      const url = `http://localhost:${port}/download/win32`
-      const result = await simpleGet(url, { redirect: false })
-      server.unref()
+      if (metaChannel) {
+        test(`[${type}] channel parsed from build metadata exists`,
+          result[metaChannel].channel,
+          metaChannel
+        )
+      }
 
-      test(`[${type}] download for win32 redirects with 302`,
-        result.statusCode,
-        302
-      )
-
-      const expect = type === 'public' ? 'github.com' : 'amazonaws.com'
-      test(`[${type}] download for win32 redirects to ${expect}`,
-        (new URL(result.headers.location)).hostname.slice(-expect.length),
-        expect
-      )
+      if (preChannel) {
+        test(`[${type}] prerelease channel exists`,
+          result[preChannel].channel,
+          preChannel
+        )
+      }
 
       return true
     })
 
-    await testAsync(`[${type}] requestHandler download/darwin works`, async () => {
+    const testPlatformDownload = async (platform, expectNoContent) => {
+      const host = isPublic ? 'github.com' : 'amazonaws.com'
+
       const server = http.createServer(await requestHandler(config))
       await new Promise((resolve, reject) => server.listen(resolve))
       const port = server.address().port
-      const url = `http://localhost:${port}/download/darwin`
+      const url = `http://localhost:${port}/download/${platform}`
       const result = await simpleGet(url, { redirect: false })
       server.unref()
 
-      test(`[${type}] download for win32 redirects with 302`,
+      if (expectNoContent) {
+        test(`[${type}] expecting no content for ${platform}`,
+          result.statusCode,
+          204
+        )
+
+        return true
+      }
+
+      test(`[${type}] download for ${platform} redirects with 302`,
         result.statusCode,
         302
       )
 
-      const expect = type === 'public' ? 'github.com' : 'amazonaws.com'
-      test(`[${type}] download for win32 redirects to ${expect}`,
-        (new URL(result.headers.location)).hostname.slice(-expect.length),
-        expect
+      test(`[${type}] download for ${platform} redirects to ${host}`,
+        (new URL(result.headers.location)).hostname.slice(-host.length),
+        host
       )
 
       return true
+    }
+
+    await testAsync(`[${type}] requestHandler download/win32`, () => {
+      return testPlatformDownload('win32')
+    })
+
+    await testAsync(`[${type}] requestHandler download/darwin`, () => {
+      return testPlatformDownload('darwin')
+    })
+
+    await testAsync(`[${type}] requestHandler fails with no content`, () => {
+      return testPlatformDownload('notaplatform', true)
     })
   }
 

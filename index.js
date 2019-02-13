@@ -52,7 +52,7 @@ const simpleGet = (url, opts = {}) => new Promise((resolve, reject) => {
 
     if (opts.noBody) return resolve(res)
 
-    const isJson = res.headers['content-type'].indexOf('json') !== -1
+    const isJson = (res.headers['content-type'] || '').indexOf('json') !== -1
     if (isJson) res.setEncoding('utf8')
 
     let data = ''
@@ -369,6 +369,8 @@ const requestHandler = async (config) => {
     if (!platform) return noContent(res)
 
     const asset = getPlatformAsset(config, repo, channel, platform, action)
+
+    if (!asset) return noContent(res)
 
     if (action === 'download') {
       if (!repo.private) return finish(asset.browser_download_url)
