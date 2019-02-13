@@ -1,6 +1,7 @@
 'use strict'
 
 const userAgent = `oneclick-update`
+const { get: httpGet } = require('http')
 const { get: httpsGet } = require('https')
 const semver = require('semver')
 const repos = {}
@@ -38,8 +39,10 @@ class GithubApiError extends Error {
 }
 
 const simpleGet = (url, opts = {}) => new Promise((resolve, reject) => {
+  const getter = url.indexOf('http://') ? httpsGet : httpGet
   const { redirect = true } = opts
-  httpsGet(url, opts, (res) => {
+
+  getter(url, opts, (res) => {
     const location = res.headers.location
 
     if (res.statusCode === 302 && location) {
@@ -401,5 +404,6 @@ const requestHandler = async (config) => {
 module.exports = {
   getReleaseList,
   latestByChannel,
-  requestHandler
+  requestHandler,
+  simpleGet
 }
