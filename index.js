@@ -1,5 +1,6 @@
 'use strict'
 
+const userAgent = `oneclick-update`
 const { get: httpsGet } = require('https')
 const semver = require('semver')
 const repos = {}
@@ -12,13 +13,18 @@ const {
   SERVER_URL
 } = process.env
 
-const hdrUa = { 'User-Agent': `oneclick-update` }
-const hdrGhJson = { Accept: `application/vnd.github.v3+json` }
-const uaJsonHeader = Object.assign({}, hdrUa, hdrGhJson)
+const contentType = {
+  ghJson: `application/vnd.github.v3+json`,
+  octet: `application/octet-stream`
+}
 
-const setUaJson = (h) => Object.assign({}, h, hdrUa, hdrGhJson)
-const getAuthHdr = (token) => (token ? { Authorization: `token ${token}` } : {})
-const getAuthHdrJson = (token) => setUaJson(getAuthHdr(token))
+const ghHeader = (token, accept = `ghJson`) => {
+  const header = { 'User-Agent': userAgent, Accept: contentType[accept] }
+
+  if (token) header.Authorization = `token ${token}`
+
+  return header
+}
 
 const apiBaseUrl = (repo) => `https://api.github.com/repos/${repo}`
 
@@ -32,11 +38,12 @@ class GithubApiError extends Error {
 }
 
 const simpleGet = (url, opts = {}) => new Promise((resolve, reject) => {
-  const { redirect } = opts
+  const { redirect = true } = opts
   httpsGet(url, opts, (res) => {
     const location = res.headers.location
 
-    if (res.statusCode === 302 && redirect !== 'manual' && location) {
+    if (res.statusCode === 302 && location) {
+      if (redirect === false) return resolve(res)
       return simpleGet(location, { redirect }).then(resolve)
     }
 
@@ -65,11 +72,11 @@ const simpleGet = (url, opts = {}) => new Promise((resolve, reject) => {
 const isPrivate = async (repo, token) => {
   const url = apiBaseUrl(repo)
 
-  const res = await simpleGet(url, { headers: uaJsonHeader })
+  const res = await simpleGet(url, { headers: ghHeader() })
   if (res.statusCode === 200) return { private: false }
 
   if (token) {
-    const headers = getAuthHdrJson(token)
+    const headers = ghHeader(token)
     const privRes = await simpleGet(url, { headers })
     if (privRes.statusCode === 200) return { private: true }
   }
@@ -127,7 +134,7 @@ const getReleaseList = async (config) => {
 
   const { repo, token } = config
   const rlsUrl = `${apiBaseUrl(repo)}/releases`
-  const headers = getAuthHdrJson(token)
+  const headers = ghHeader(token)
   const { data: releases, error } = await simpleGet(rlsUrl, { headers })
 
   if (error) return Promise.reject(error)
@@ -325,10 +332,15 @@ const requestHandler = async (config) => {
     return res.end()
   }
 
-  return (req, res) => {
+  return async (req, res) => {
     const { headers } = req
     const [path] = req.url.split('?')
     const pathLower = path.toLowerCase()
+
+    const finish = (location) => {
+      if (location) res.writeHead(302, { Location: location })
+      return res.end()
+    }
 
     if (repo.private && !serverUrl) {
       serverUrl = getServerUrl(repo, pathLower, req)
@@ -355,6 +367,15 @@ const requestHandler = async (config) => {
 
     const asset = getPlatformAsset(config, repo, channel, platform, action)
 
+    if (action === 'download') {
+      if (!repo.private) return finish(asset.browser_download_url)
+
+      const headers = ghHeader(config.token, 'octet')
+      const privRes = await simpleGet(asset.url, { headers, redirect: false })
+
+      return finish(privRes.headers.location)
+    }
+
     res.setHeader('Content-Type', 'application/json')
     const tmpObj = {
       action,
@@ -365,6 +386,7 @@ const requestHandler = async (config) => {
       asset
     }
     res.end(JSON.stringify(tmpObj, null, 2))
+
     /* ROUTES
       /
       /download[/channel]
