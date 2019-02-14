@@ -9,6 +9,9 @@ const {
 } = require('./index')
 const repo = `doesdev/oneclick-release-test`
 const fullUrlRepo = `https://github.com/doesdev/oneclick-release-test`
+const colorReset = `\u001b[0m`
+const colorGreen = `\u001b[32m`
+const verbose = true
 
 let secrets
 try {
@@ -26,12 +29,12 @@ const start = (msg) => process.stdout.write(`${msg}\n`)
 const finish = () => {
   process.stdout.clearLine()
   process.stdout.cursorTo(0)
-  process.stdout.write(`All ${run} tests passed\n`)
+  process.stdout.write(`${colorGreen}All ${run} tests passed${colorReset}\n`)
 }
 
 let run = 0
 const fail = (err) => {
-  console.log('\n')
+  process.stdout.write(`${colorReset}\n`)
   console.error(err instanceof Error ? err : new Error(`Fail: ${err}`))
   return process.exit(1)
 }
@@ -46,9 +49,13 @@ const test = (msg, isTruthyOrCompA, compB) => {
 
   if (!isTruthyOrCompA) return fail(msg)
 
-  process.stdout.clearLine()
-  process.stdout.cursorTo(0)
-  process.stdout.write(`${run} test have passed`)
+  if (verbose) {
+    process.stdout.write(`${colorGreen}Passed:${colorReset} ${msg}\n`)
+  } else {
+    process.stdout.clearLine()
+    process.stdout.cursorTo(0)
+    process.stdout.write(`${colorGreen}${run} test have passed${colorReset}`)
+  }
   return true
 }
 
