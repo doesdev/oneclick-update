@@ -106,23 +106,28 @@ const runTests = async () => {
       return true
     })
 
-    const testPlatformDownload = async (platform, expectNoContent) => {
-      const host = isPublic ? 'github.com' : 'amazonaws.com'
-
+    const getServerResponse = async (action, channel, platform, redirect) => {
       const server = http.createServer(await requestHandler(config))
       await new Promise((resolve, reject) => server.listen(resolve))
       const port = server.address().port
-      const url = `http://localhost:${port}/download/${platform}`
-      const result = await simpleGet(url, { redirect: false })
+      const ch = channel ? `/${channel}` : ''
+      const url = `http://localhost:${port}/${action}${ch}/${platform}`
+      const result = await simpleGet(url, { redirect })
+
       server.unref()
 
+      return result
+    }
+
+    const testPlatformDownload = async (platform, expectNoContent) => {
+      const host = isPublic ? 'github.com' : 'amazonaws.com'
+      const result = await getServerResponse('download', null, platform, false)
+
       if (expectNoContent) {
-        test(`[${type}] expecting no content for ${platform}`,
+        return test(`[${type}] download expecting no content for ${platform}`,
           result.statusCode,
           204
         )
-
-        return true
       }
 
       test(`[${type}] download for ${platform} redirects with 302`,
@@ -146,8 +151,51 @@ const runTests = async () => {
       return testPlatformDownload('darwin')
     })
 
-    await testAsync(`[${type}] requestHandler fails with no content`, () => {
+    await testAsync(`[${type}] download fails with no content`, () => {
       return testPlatformDownload('notaplatform', true)
+    })
+
+    const testPlatformUpdate = async (platform, expectNoContent) => {
+      const { serverUrl } = config
+      const host = isPublic ? 'github.com' : (new URL(serverUrl)).hostname
+      const result = await getServerResponse('update', null, platform)
+      const { data } = result
+
+      if (expectNoContent) {
+        return test(`[${type}] update expecting no content for ${platform}`,
+          result.statusCode,
+          204
+        )
+      }
+
+      test(`[${type}] update for ${platform} contains name`,
+        typeof data.name,
+        'string'
+      )
+
+      test(`[${type}] update for ${platform} contains expected url`,
+        typeof data.name,
+        'string'
+      )
+
+      test(`[${type}] update for ${platform} contains expected url`,
+        (new URL(data.url)).hostname.slice(-host.length),
+        host
+      )
+
+      return true
+    }
+
+    await testAsync(`[${type}] requestHandler update/win32`, () => {
+      return testPlatformUpdate('win32')
+    })
+
+    await testAsync(`[${type}] requestHandler update/darwin`, () => {
+      return testPlatformUpdate('darwin')
+    })
+
+    await testAsync(`[${type}] update fails with no content`, () => {
+      return testPlatformUpdate('notaplatform', true)
     })
   }
 

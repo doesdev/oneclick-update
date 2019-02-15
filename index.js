@@ -4,7 +4,10 @@ const userAgent = `oneclick-update`
 const { get: httpGet } = require('http')
 const { get: httpsGet } = require('https')
 const semver = require('semver')
+const parseQs = require('tiny-params')
 const repos = {}
+const platforms = ['win32', 'darwin']
+const allowedRoots = { download: true, update: true, changelog: true }
 
 const {
   GITHUB_ACCOUNT,
@@ -122,6 +125,7 @@ const getConfig = async (configIn = {}) => {
     msg += ` - If not set we will try to extract that info from each request\n`
     msg += ` - That isn't guaranteed to produce the correct return URL\n`
     msg += ` - That also adds overhead to each request\n`
+    msg += ` - HTTPS is assumed unless running on port 80\n`
     console.log(msg)
   }
 
@@ -213,17 +217,27 @@ const getChannel = (repo, channels, pathLower) => {
   return channel
 }
 
-const getPlatform = (repo, pathLower, channel, headers) => {
+const getPlatform = (config, pathLower, channel, action, headers) => {
+  const repo = repos[config.repo]
   const cached = repo.cacheByPath.platform[pathLower]
+
   if (cached) return cached
 
-  let tmpPath = pathLower.replace(/^\/download|update/, '')
-  if (channel.channel) tmpPath = tmpPath.replace(`/${channel.channel}`, '')
+  let tmpPath = pathLower
+  const ch = channel.channel || null
+  const isDl = action === 'download'
+  const customPlatforms = Object.keys(config.platformFilters)
+  const valid = (p) => platforms.concat(customPlatforms).includes(p) ? p : null
 
-  const pathPlatform = tmpPath.split('/')[1]
-  const platform = pathPlatform || guessPlatform(headers['user-agent'])
+  const prune = ['/update', '/download', ch]
+  prune.forEach((p) => {
+    tmpPath = tmpPath.indexOf(p) ? tmpPath : tmpPath.slice(p.length + 1)
+  })
 
-  if (pathPlatform) repo.cacheByPath.platform[pathLower] = platform
+  const pathPlatform = tmpPath.split('/')[0]
+  const platform = valid(pathPlatform) || guessPlatform(headers['user-agent'])
+
+  if (pathPlatform && !isDl) repo.cacheByPath.platform[pathLower] = platform
 
   return platform
 }
@@ -244,9 +258,10 @@ const getServerUrl = (repo, pathLower, req) => {
 }
 
 const filterByExt = (assets, ext) => {
-  ext = ext.charAt(0) === '.' ? ext : `.${ext}`
-  const extLen = ext.length
-  return assets.filter((a) => a.name.indexOf(ext) === a.name.length - extLen)
+  if (ext.charAt(0) === '.') ext = ext.slice(1)
+  return assets.filter(({ name }) => {
+    return ext === name.substr(name.lastIndexOf('.') + 1, name.length)
+  })
 }
 
 const firstForArch = (assets, arch) => {
@@ -282,7 +297,7 @@ const platformFilters = {
       let asset
       if (ext === 'dmg' && (asset = filterByExt(assets, 'dmg')[0])) return asset
 
-      if ((assets = filterByExt(assets, 'zip')).length < 2) return assets[1]
+      if ((assets = filterByExt(assets, 'zip')).length < 2) return assets[0]
 
       assets = assets.filter((a) => a.name.match(/mac|osx|darwin/i))
 
@@ -302,7 +317,7 @@ const platformFilters = {
   }
 }
 
-const getPlatformAsset = (config, repo, channel, platform, action, arch) => {
+const getPlatformAsset = (config, channel, platform, action, arch, ext) => {
   // const cached = repo.cacheByPath.platformAsset[pathLower]
   const assets = channel.assets.slice(0)
   let asset
@@ -310,10 +325,10 @@ const getPlatformAsset = (config, repo, channel, platform, action, arch) => {
   if (!config.platformFilters[platform] && !platformFilters[platform]) return
 
   if (config.platformFilters && config.platformFilters[platform]) {
-    asset = config.platformFilters[platform](assets, action, arch)
+    asset = config.platformFilters[platform](assets, action, arch, ext)
   }
 
-  asset = asset || platformFilters[platform](assets, action, arch)
+  asset = asset || platformFilters[platform](assets, action, arch, ext)
 
   return asset
 }
@@ -325,7 +340,6 @@ const requestHandler = async (config) => {
     return Promise.reject(ex)
   }
 
-  const channels = await latestByChannel(config)
   const repo = repos[config.repo]
 
   let { serverUrl } = config
@@ -337,8 +351,12 @@ const requestHandler = async (config) => {
 
   return async (req, res) => {
     const { headers } = req
-    const [path] = req.url.split('?')
+    const query = parseQs(req.url)
+    const [path] = (req.url.length < 2 ? '/download' : req.url).split('?')
     const pathLower = path.toLowerCase()
+    const ext = query.filetype || query.fileType || query.ext
+
+    if (!allowedRoots[path.split('/')[1]]) return noContent(res)
 
     const finish = (location) => {
       if (location) res.writeHead(302, { Location: location })
@@ -360,15 +378,17 @@ const requestHandler = async (config) => {
     const isRelease = path.indexOf('/RELEASES') !== -1
     const action = isUpdate ? 'update' : (isRelease ? 'release' : 'download')
 
+    const channels = await latestByChannel(config)
+
     const channel = getChannel(repo, channels, pathLower)
 
     if (!channel) return noContent(res)
 
-    const platform = getPlatform(repo, pathLower, channel, headers)
+    const platform = getPlatform(config, pathLower, channel, action, headers)
 
     if (!platform) return noContent(res)
 
-    const asset = getPlatformAsset(config, repo, channel, platform, action)
+    const asset = getPlatformAsset(config, channel, platform, action, null, ext)
 
     if (!asset) return noContent(res)
 
@@ -381,16 +401,21 @@ const requestHandler = async (config) => {
       return finish(privRes.headers.location)
     }
 
-    res.setHeader('Content-Type', 'application/json')
-    const tmpObj = {
-      action,
-      serverUrl,
-      channel: channel.channel,
-      tag: channel.tag_name,
-      platform,
-      asset
+    if (action === 'update') {
+      res.setHeader('Content-Type', 'application/json')
+
+      let url = asset.browser_download_url
+
+      if (repo.private) {
+        let ch = channel.channel ? `/${channel.channel}` : ''
+        const qs = platform === 'darwin' ? `?filetype=zip` : ''
+        url = `${serverUrl}/download${ch}/${platform}${qs}`
+      }
+
+      const { tag_name: name, body: notes, name: title } = channel
+
+      res.end(JSON.stringify({ name, notes, title, url }, null, 2))
     }
-    res.end(JSON.stringify(tmpObj, null, 2))
 
     /* ROUTES
       /
