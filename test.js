@@ -1,5 +1,6 @@
 'use strict'
 
+const { runTests, start, finish, test, testAsync } = require('mvt')
 const http = require('http')
 const {
   getReleaseList,
@@ -9,9 +10,6 @@ const {
 } = require('./index')
 const repo = `doesdev/oneclick-release-test`
 const fullUrlRepo = `https://github.com/doesdev/oneclick-release-test`
-const colorReset = `\u001b[0m`
-const colorGreen = `\u001b[32m`
-const verbose = true
 
 let secrets
 try {
@@ -24,50 +22,7 @@ try {
 const publicConfig = { repo, token: secrets.token }
 const fullUrlConfig = (c) => Object.assign({}, c, { repo: fullUrlRepo })
 
-const start = (msg) => process.stdout.write(`${msg}\n`)
-
-const finish = () => {
-  process.stdout.clearLine()
-  process.stdout.cursorTo(0)
-  process.stdout.write(`${colorGreen}All ${run} tests passed${colorReset}\n`)
-}
-
-let run = 0
-const fail = (err) => {
-  process.stdout.write(`${colorReset}\n`)
-  console.error(err instanceof Error ? err : new Error(`Fail: ${err}`))
-  return process.exit(1)
-}
-
-const test = (msg, isTruthyOrCompA, compB) => {
-  run++
-
-  if (compB !== undefined && isTruthyOrCompA !== compB) {
-    msg += `\n${isTruthyOrCompA} !== ${compB}`
-    isTruthyOrCompA = false
-  }
-
-  if (!isTruthyOrCompA) return fail(msg)
-
-  if (verbose) {
-    process.stdout.write(`${colorGreen}Passed:${colorReset} ${msg}\n`)
-  } else {
-    process.stdout.clearLine()
-    process.stdout.cursorTo(0)
-    process.stdout.write(`${colorGreen}${run} test have passed${colorReset}`)
-  }
-  return true
-}
-
-const testAsync = async (msg, promise) => {
-  try {
-    test(msg, await promise())
-  } catch (ex) {
-    return fail(ex)
-  }
-}
-
-const runTests = async () => {
+runTests(async () => {
   start('Starting oneclick-update tests')
 
   for (const type of ['public', 'private']) {
@@ -200,6 +155,4 @@ const runTests = async () => {
   }
 
   finish()
-}
-
-runTests().catch(fail)
+})

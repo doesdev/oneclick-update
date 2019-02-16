@@ -7,7 +7,7 @@
     "index.js"
   ],
   "scripts": {
-    "test": "node test"
+    "test": "node test --verbose"
   },
   "repository": {
     "type": "git",
@@ -38,5 +38,7 @@
     "semver": "^5.6.0",
     "tiny-params": "^2.1.0"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "mvt": "^1.0.0"
+  }
 }
