@@ -2,6 +2,7 @@
 
 const { runTests, start, finish, test, testAsync } = require('mvt')
 const http = require('http')
+const semver = require('semver')
 const {
   getReleaseList,
   latestByChannel,
@@ -166,6 +167,10 @@ runTests(async () => {
 
     await testAsync(`[${type}] update returns no content for latest version`, () => {
       return testPlatformUpdate('win32', true, latest)
+    })
+
+    await testAsync(`[${type}] update works for non-latest version`, () => {
+      return testPlatformUpdate('win32', false, semver.inc(latest, 'patch'))
     })
   }
 
