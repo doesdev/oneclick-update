@@ -1,20 +1,22 @@
 'use strict'
 
 const userAgent = `oneclick-update`
-const { get: httpGet } = require('http')
+const { get: httpGet, createServer } = require('http')
 const { get: httpsGet } = require('https')
 const semver = require('semver')
 const parseQs = require('tiny-params')
 const repos = {}
 const platforms = ['win32', 'darwin']
 const allowedRoots = { download: true, update: true, changelog: false }
+const defaultPort = 8082
 
 const {
   GITHUB_ACCOUNT,
   GITHUB_PROJECT,
   GITHUB_REPO,
   GITHUB_OAUTH_TOKEN,
-  SERVER_URL
+  SERVER_URL,
+  PORT
 } = process.env
 
 const contentType = {
@@ -99,6 +101,7 @@ const getConfig = async (configIn = {}) => {
   if (repos[configIn.repos]) return configIn
 
   const config = Object.assign({}, configIn)
+  config.port = (config.port || PORT || '').toString().trim() || defaultPort
   config.serverUrl = (config.serverUrl || SERVER_URL || '').trim()
   config.token = (config.token || GITHUB_OAUTH_TOKEN || '').trim()
   config.account = (config.account || GITHUB_ACCOUNT || '').trim()
@@ -448,4 +451,21 @@ module.exports = {
   latestByChannel,
   requestHandler,
   simpleGet
+}
+
+if (require.main === module) {
+  const startServer = async () => {
+    let config
+    try {
+      config = require('./secrets.json')
+    } catch (ex) {}
+
+    config = await getConfig(config)
+    const handler = await requestHandler(config)
+    createServer(handler).listen(config.port, () => {
+      console.log(`Update server running on port ${config.port}`)
+    })
+  }
+
+  startServer()
 }
