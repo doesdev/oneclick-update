@@ -141,11 +141,6 @@ runTests(async () => {
       )
 
       test(`[${type}] update for ${platform} contains expected url`,
-        typeof data.name,
-        'string'
-      )
-
-      test(`[${type}] update for ${platform} contains expected url`,
         (new URL(data.url)).hostname.slice(-host.length),
         host
       )
