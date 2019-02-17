@@ -31,6 +31,8 @@ runTests(async () => {
     const metaChannel = isPublic ? 'vendor-a' : null
     const preChannel = isPublic ? 'prerelease' : null
 
+    let latest
+
     test(`[${type}] getReleaseList gets list of recent releases`,
       Array.isArray(await getReleaseList(config))
     )
@@ -58,15 +60,23 @@ runTests(async () => {
         )
       }
 
+      latest = result[''].tag_name
+
       return true
     })
 
-    const getServerResponse = async (action, channel, platform, redirect) => {
+    const getServerResponse = async (
+      action,
+      channel,
+      platform,
+      version,
+      redirect
+    ) => {
       const server = http.createServer(await requestHandler(config))
       await new Promise((resolve, reject) => server.listen(resolve))
       const port = server.address().port
-      const ch = channel ? `/${channel}` : ''
-      const url = `http://localhost:${port}/${action}${ch}/${platform}`
+      const path = [action, channel, platform, version].filter((v) => v).join('/')
+      const url = `http://localhost:${port}/${path}`
       const result = await simpleGet(url, { redirect })
 
       server.unref()
@@ -76,7 +86,8 @@ runTests(async () => {
 
     const testPlatformDownload = async (platform, expectNoContent) => {
       const host = isPublic ? 'github.com' : 'amazonaws.com'
-      const result = await getServerResponse('download', null, platform, false)
+      const action = 'download'
+      const result = await getServerResponse(action, null, platform, null, false)
 
       if (expectNoContent) {
         return test(`[${type}] download expecting no content for ${platform}`,
@@ -110,10 +121,10 @@ runTests(async () => {
       return testPlatformDownload('notaplatform', true)
     })
 
-    const testPlatformUpdate = async (platform, expectNoContent) => {
+    const testPlatformUpdate = async (platform, expectNoContent, version) => {
       const { serverUrl } = config
       const host = isPublic ? 'github.com' : (new URL(serverUrl)).hostname
-      const result = await getServerResponse('update', null, platform)
+      const result = await getServerResponse('update', null, platform, version)
       const { data } = result
 
       if (expectNoContent) {
@@ -149,8 +160,12 @@ runTests(async () => {
       return testPlatformUpdate('darwin')
     })
 
-    await testAsync(`[${type}] update fails with no content`, () => {
+    await testAsync(`[${type}] update returns no content for bad platform`, () => {
       return testPlatformUpdate('notaplatform', true)
+    })
+
+    await testAsync(`[${type}] update returns no content for latest version`, () => {
+      return testPlatformUpdate('win32', true, latest)
     })
   }
 

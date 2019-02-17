@@ -92,7 +92,7 @@ const isPrivate = async (repo, token) => {
 
 const initCacheForRepo = (repo) => {
   repo.resetCache = () => initCacheForRepo(repo)
-  repo.cacheByPath = { channel: {}, platform: {}, serverUrl: {} }
+  repo.cacheByPath = { channel: {}, platform: {}, serverUrl: {}, version: {} }
 }
 
 const getConfig = async (configIn = {}) => {
@@ -235,6 +235,22 @@ const getPlatform = (config, path, channel, action, headers) => {
   if (pathPlatform && useCache) repo.cacheByPath.platform[path] = platform
 
   return platform
+}
+
+const getVersion = (config, path, channel, action, platform) => {
+  const repo = repos[config.repo]
+  const cached = repo.cacheByPath.version[path]
+
+  if (cached || action === 'download') return cached
+
+  const ch = channel.channel ? `/${channel.channel}` : ''
+  const cut = `/${action === 'release' ? 'update' : action}${ch}/${platform}`
+  const tmpPath = path.indexOf(cut) ? path : path.slice(cut.length + 1)
+  const version = semver.valid(tmpPath.split('/')[0])
+
+  repo.cacheByPath.version[path] = version
+
+  return version
 }
 
 const getServerUrl = (repo, pathLower, req) => {
@@ -382,6 +398,10 @@ const requestHandler = async (config) => {
     const platform = getPlatform(config, pathLower, channel, action, headers)
 
     if (!platform) return noContent(res)
+
+    const version = getVersion(config, pathLower, channel, action, platform)
+
+    if (version && semver.eq(channel.tag_name, version)) return noContent(res)
 
     const asset = getPlatformAsset(config, channel, platform, action, null, ext)
 
