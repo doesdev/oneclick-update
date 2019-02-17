@@ -229,8 +229,8 @@ const getPlatform = (config, path, channel, action, headers) => {
   const tmpPath = path.indexOf(cut) ? path : path.slice(cut.length + 1)
   const customPlatforms = Object.keys(config.platformFilters)
   const valid = (p) => platforms.concat(customPlatforms).includes(p) ? p : null
-  const pathPlatform = tmpPath.split('/')[0]
-  const platform = valid(pathPlatform) || guessPlatform(headers['user-agent'])
+  const pathPlatform = valid(tmpPath.split('/')[0])
+  const platform = pathPlatform || guessPlatform(headers['user-agent'])
 
   if (pathPlatform && useCache) repo.cacheByPath.platform[path] = platform
 
