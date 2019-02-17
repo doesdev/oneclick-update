@@ -7,7 +7,7 @@ const semver = require('semver')
 const parseQs = require('tiny-params')
 const repos = {}
 const platforms = ['win32', 'darwin']
-const allowedRoots = { download: true, update: true, changelog: true }
+const allowedRoots = { download: true, update: true, changelog: false }
 
 const {
   GITHUB_ACCOUNT,
