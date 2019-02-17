@@ -217,27 +217,22 @@ const getChannel = (repo, channels, pathLower) => {
   return channel
 }
 
-const getPlatform = (config, pathLower, channel, action, headers) => {
+const getPlatform = (config, path, channel, action, headers) => {
+  const useCache = action !== 'download'
   const repo = repos[config.repo]
-  const cached = repo.cacheByPath.platform[pathLower]
+  const cached = useCache ? repo.cacheByPath.platform[path] : null
 
   if (cached) return cached
 
-  let tmpPath = pathLower
-  const ch = channel.channel || null
-  const isDl = action === 'download'
+  const ch = channel.channel ? `/${channel.channel}` : ''
+  const cut = `/${action === 'release' ? 'update' : action}${ch}`
+  const tmpPath = path.indexOf(cut) ? path : path.slice(cut.length + 1)
   const customPlatforms = Object.keys(config.platformFilters)
   const valid = (p) => platforms.concat(customPlatforms).includes(p) ? p : null
-
-  const prune = ['/update', '/download', ch]
-  prune.forEach((p) => {
-    tmpPath = tmpPath.indexOf(p) ? tmpPath : tmpPath.slice(p.length + 1)
-  })
-
   const pathPlatform = tmpPath.split('/')[0]
   const platform = valid(pathPlatform) || guessPlatform(headers['user-agent'])
 
-  if (pathPlatform && !isDl) repo.cacheByPath.platform[pathLower] = platform
+  if (pathPlatform && useCache) repo.cacheByPath.platform[path] = platform
 
   return platform
 }
