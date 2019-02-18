@@ -39,6 +39,6 @@
     "tiny-params": "^2.1.0"
   },
   "devDependencies": {
-    "mvt": "^1.0.1"
+    "mvt": "^1.1.0"
   }
 }
