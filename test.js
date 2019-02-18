@@ -3,6 +3,7 @@
 const { runTests, start, finish, test, testAsync } = require('mvt')
 const http = require('http')
 const semver = require('semver')
+const qs = require('tiny-params')
 const {
   getReleaseList,
   latestByChannel,
@@ -32,7 +33,7 @@ runTests(async () => {
     const metaChannel = isPublic ? 'vendor-a' : null
     const preChannel = isPublic ? 'prerelease' : null
 
-    let latest
+    let latest, randomAsset
 
     test(`[${type}] getReleaseList gets list of recent releases`,
       Array.isArray(await getReleaseList(config))
@@ -62,6 +63,7 @@ runTests(async () => {
       }
 
       latest = result[''].tag_name
+      randomAsset = result[''].assets[0]
 
       return true
     })
@@ -71,13 +73,15 @@ runTests(async () => {
       channel,
       platform,
       version,
-      redirect
+      redirect,
+      filename
     ) => {
       const server = http.createServer(await requestHandler(config))
       await new Promise((resolve, reject) => server.listen(resolve))
       const port = server.address().port
       const path = [action, channel, platform, version].filter((v) => v).join('/')
-      const url = `http://localhost:${port}/${path}`
+      const q = filename ? `?filename=${filename}` : ''
+      const url = `http://localhost:${port}/${path}${q}`
       const result = await simpleGet(url, { redirect })
 
       server.unref()
@@ -120,6 +124,23 @@ runTests(async () => {
 
     await testAsync(`[${type}] download fails with no content`, () => {
       return testPlatformDownload('notaplatform', true)
+    })
+
+    await testAsync(`[${type}] download specific file works`, async () => {
+      const file = randomAsset.name
+      const args = ['download', null, null, null, false, file]
+      const result = await getServerResponse(...args)
+      const location = result.headers.location
+      let resultFile
+
+      if (isPublic) {
+        resultFile = location.slice(location.lastIndexOf('/') + 1)
+      } else {
+        const meta = qs(location)['response-content-disposition']
+        resultFile = meta.split('filename=')[1]
+      }
+
+      return test(`[${type}] redirect url points to filename`, file, resultFile)
     })
 
     const testPlatformUpdate = async (platform, expectNoContent, version) => {

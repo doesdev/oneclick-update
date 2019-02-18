@@ -331,10 +331,16 @@ const platformFilters = {
   }
 }
 
-const getPlatformAsset = (config, channel, platform, action, arch, ext) => {
+const getPlatformAsset = (config, channel, platform, action, query) => {
+  const arch = query.arch
+  const ext = query.filetype
+  const file = query.filename
+
   // const cached = repo.cacheByPath.platformAsset[pathLower]
   const assets = channel.assets.slice(0)
   let asset
+
+  if (file && (asset = assets.find((a) => a.name === file))) return asset
 
   if (!config.platformFilters[platform] && !platformFilters[platform]) return
 
@@ -368,7 +374,6 @@ const requestHandler = async (config) => {
     const query = parseQs(req.url)
     const [path] = (req.url.length < 2 ? '/download' : req.url).split('?')
     const pathLower = path.toLowerCase()
-    const ext = query.filetype || query.fileType || query.ext
 
     if (!allowedRoots[path.split('/')[1]]) return noContent(res)
 
@@ -400,13 +405,13 @@ const requestHandler = async (config) => {
 
     const platform = getPlatform(config, pathLower, channel, action, headers)
 
-    if (!platform) return noContent(res)
+    if (!platform && !query.filename) return noContent(res)
 
     const version = getVersion(config, pathLower, channel, action, platform)
 
     if (version && semver.eq(channel.tag_name, version)) return noContent(res)
 
-    const asset = getPlatformAsset(config, channel, platform, action, null, ext)
+    const asset = getPlatformAsset(config, channel, platform, action, query)
 
     if (!asset) return noContent(res)
 
