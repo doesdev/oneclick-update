@@ -69,7 +69,10 @@ const simpleGet = (url, opts = {}) => new Promise((resolve, reject) => {
         } catch (ex) {
           res.error = ex
         }
+      } else {
+        data = data.charCodeAt(0) === 0xFEFF ? data.slice(1) : data
       }
+
       res.data = data
       resolve(res)
     })
@@ -298,7 +301,7 @@ const platformFilters = {
 
     const release = () => {
       assets = assets.filter((a) => !a.name.indexOf('RELEASES'))
-      if ((assets = filterByExt(assets, ext)).length < 2) return assets[0]
+      if (assets.length < 2) return assets[0]
       return firstForArch(assets, arch)
     }
 
@@ -393,8 +396,8 @@ const requestHandler = async (config) => {
       }
     }
 
-    const isUpdate = !path.indexOf('/update')
-    const isRelease = path.indexOf('/RELEASES') !== -1
+    const isUpdate = !pathLower.indexOf('/update')
+    const isRelease = pathLower.indexOf('/releases') !== -1
     const action = isUpdate ? 'update' : (isRelease ? 'release' : 'download')
 
     const channels = await latestByChannel(config)
@@ -437,7 +440,15 @@ const requestHandler = async (config) => {
 
       const { tag_name: name, body: notes, name: title } = channel
 
-      res.end(JSON.stringify({ name, notes, title, url }, null, 2))
+      return res.end(JSON.stringify({ name, notes, title, url }, null, 2))
+    }
+
+    if (action === 'release') {
+      const url = repo.private ? asset.url : asset.browser_download_url
+      const headers = ghHeader(repo.private ? config.token : null, 'octet')
+      const { data } = await simpleGet(url, { headers })
+
+      return res.end(data)
     }
 
     /* ROUTES
