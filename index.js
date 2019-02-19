@@ -447,8 +447,14 @@ const requestHandler = async (config) => {
       const url = repo.private ? asset.url : asset.browser_download_url
       const headers = ghHeader(repo.private ? config.token : null, 'octet')
       const { data } = await simpleGet(url, { headers })
+      const urlEls = [serverUrl, 'download', channel.channel, platform, version]
+      const urlOut = urlEls.filter((p) => p).join('/')
+      const append = (v) => encodeURI(`${urlOut}?filename=${v}`)
+      const releases = data.split('\n').map((l) => {
+        return l.split(' ').map((v, i) => i === 1 ? append(v) : v).join(' ')
+      }).join('\n')
 
-      return res.end(data)
+      return res.end(releases)
     }
 
     /* ROUTES
