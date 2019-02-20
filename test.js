@@ -33,7 +33,7 @@ runTests(async () => {
     const metaChannel = isPublic ? 'vendor-a' : null
     const preChannel = isPublic ? 'prerelease' : null
 
-    let latest, randomAsset
+    let latest, notLatest, randomAsset
 
     test(`[${type}] getReleaseList gets list of recent releases`,
       Array.isArray(await getReleaseList(config))
@@ -63,6 +63,7 @@ runTests(async () => {
       }
 
       latest = result[''].tag_name
+      notLatest = semver.inc(latest, 'patch')
       randomAsset = result[''].assets[0]
 
       return true
@@ -74,12 +75,19 @@ runTests(async () => {
       platform,
       version,
       redirect,
-      filename
+      filename,
+      release
     ) => {
       const server = http.createServer(await requestHandler(config))
       await new Promise((resolve, reject) => server.listen(resolve))
       const port = server.address().port
-      const path = [action, channel, platform, version].filter((v) => v).join('/')
+      const path = [
+        action,
+        channel,
+        platform,
+        version,
+        release ? 'RELEASES' : null
+      ].filter((v) => v).join('/')
       const q = filename ? `?filename=${filename}` : ''
       const url = `http://localhost:${port}/${path}${q}`
       const result = await simpleGet(url, { redirect })
@@ -186,7 +194,28 @@ runTests(async () => {
     })
 
     await testAsync(`[${type}] update works for non-latest version`, () => {
-      return testPlatformUpdate('win32', false, semver.inc(latest, 'patch'))
+      return testPlatformUpdate('win32', false, notLatest)
+    })
+
+    await testAsync(`[${type}] RELEASES gets expected data`, async () => {
+      const { serverUrl } = config
+      const expectHost = isPublic ? 'github.com' : (new URL(serverUrl)).hostname
+      const args = ['update', null, 'win32', notLatest, true, null, true]
+      const { data } = await getServerResponse(...args)
+      const firstLine = data.split('\n')[0]
+      const split = firstLine.split(' ')
+      const [hash, url, size] = split
+      const host = (new URL(url)).hostname.slice(-expectHost.length)
+
+      test(`[${type}] RELEASES has expected sections`, split.length, 3)
+
+      test(`[${type}] RELEASES hash is expected length`, hash.length, 40)
+
+      test(`[${type}] RELEASES url is as expected`, host, expectHost)
+
+      test(`[${type}] RELEASES size is a number`, !Number.isNaN(+size))
+
+      return true
     })
   }
 
