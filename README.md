@@ -13,7 +13,21 @@
 
 > Simple installer downloads and update server
 
+## What it does
+
+## Why use this over [hazel](https://github.com/zeit/hazel), [nuts](https://github.com/GitbookIO/nuts), etc...
+
 ## Install
+
+Just running as a server, use any of these options to download the script. It's standalone.
+
+- [CLICK HERE](https://raw.githubusercontent.com/doesdev/oneclick-update/master/index.js)
+- `curl -XGET 'https://raw.githubusercontent.com/doesdev/oneclick-update/master/index.js'`
+- `git clone https://github.com/doesdev/oneclick-update`
+
+If you're using it as a module, you know the drill.
+
+`npm i -s oneclick-update`
 
 ## Usage
 
