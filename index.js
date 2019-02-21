@@ -474,7 +474,6 @@ const requestHandler = async (config) => {
       /download[/channel]/:platform
       /update[/channel]/:platform/:version
       /update[/channel]/win32/:version/RELEASES
-      /changelog[/channel]/:version
     */
   }
 }
