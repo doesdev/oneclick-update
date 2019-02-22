@@ -21,9 +21,8 @@
 
 Just running as a server, use any of these options to download the script. It's standalone.
 
-- [CLICK HERE](https://raw.githubusercontent.com/doesdev/oneclick-update/master/index.js)
+- [CLICK HERE](https://raw.githubusercontent.com/doesdev/oneclick-update/master/index.js) and save the script where you please
 - `curl -o oneclick.js https://raw.githubusercontent.com/doesdev/oneclick-update/master/index.js`
-- `git clone https://github.com/doesdev/oneclick-update`
 
 If you're using it as a module, you know the drill.
 
@@ -31,7 +30,7 @@ If you're using it as a module, you know the drill.
 
 ## Usage
 
-Just running as a server, couldn't be simpler
+Just running as a server, couldn't be simpler.
 
 ```sh
 curl -o oneclick.js https://raw.githubusercontent.com/doesdev/oneclick-update/master/index.js
