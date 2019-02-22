@@ -3,12 +3,98 @@
 const userAgent = `oneclick-update`
 const { get: httpGet, createServer } = require('http')
 const { get: httpsGet } = require('https')
-const semver = require('semver')
-const parseQs = require('tiny-params')
 const repos = {}
 const platforms = ['win32', 'darwin']
 const allowedRoots = { download: true, update: true, changelog: false }
 const defaultPort = 8082
+
+const parseQs = (url) => {
+  if (!url) return {}
+  const qIdx = url.indexOf('?')
+  if (qIdx === -1) return {}
+  let q = url.slice(qIdx + 1)
+  if (!q) return {}
+  const obj = {}
+  const ary = q.split('&')
+  ary.forEach(function (q) {
+    q = (q.split('=') || [q]).map(decodeURIComponent)
+    if (q[0] !== (q[0] = q[0].replace(/\[]$/, ''))) obj[q[0]] = obj[q[0]] || []
+    if (!obj[q[0]]) return (obj[q[0]] = q[1])
+    if (Array.isArray(obj[q[0]])) obj[q[0]] = obj[q[0]].concat([q[1]])
+    else obj[q[0]] = [obj[q[0]]].concat([q[1]])
+  })
+  return obj
+}
+
+const semverRgx = new RegExp(
+  `^v?(?<major>0|[1-9]\\d*)\\.(?<minor>0|[1-9]\\d*)\\.(?<patch>0|[1-9]\\d*)` +
+  `(?:-(?<prerelease>(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.` +
+  `(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+(?<buildmetadata>` +
+  `[0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$`
+)
+
+const tagCache = {}
+const toSemver = (t = '') => {
+  if (tagCache[t]) return tagCache[t]
+
+  const isSemver = true
+  const matched = t.match(semverRgx)
+
+  if (!matched) {
+    tagCache[t] = {
+      isSemver,
+      valid: null,
+      prerelease: null,
+      weighted: 0,
+      preWeighted: 0,
+      eq: () => false,
+      gt: () => false
+    }
+    return tagCache[t]
+  }
+
+  const toWeight = (accum, cur, i) => {
+    if (Number.isNaN(+cur)) return accum || 0
+    return accum + (+cur * parseFloat(`1e${Math.log(i + 1) * 10}`))
+  }
+
+  const versionAry = matched.slice(1, 4).map((n) => +n)
+  const [major, minor, patch] = versionAry
+  const { prerelease: pre } = matched.groups || {}
+  const valid = `${major}.${minor}.${patch}${pre ? `-${pre}` : ''}`
+  const weighted = versionAry.reverse().reduce(toWeight, 0)
+
+  let prerelease = null
+  let preWeighted = 0
+  if (pre) {
+    prerelease = pre.split('.').map((p) => Number.isNaN(+p) ? p : +p)
+    preWeighted += prerelease.reduce(toWeight, 0)
+    if (prerelease.includes('alpha')) preWeighted -= 1
+  }
+
+  const eq = (b) => {
+    if (!b || !b.isSemver) b = toSemver(b)
+    return valid === b.valid
+  }
+
+  const gt = (b) => {
+    if (!b || !b.isSemver) b = toSemver(b)
+    if (valid === b.valid || b.weighted > weighted) return false
+    if (weighted > b.weighted) return true
+    return preWeighted > b.preWeighted
+  }
+
+  tagCache[t] = {
+    isSemver,
+    valid,
+    prerelease,
+    weighted,
+    preWeighted,
+    eq,
+    gt
+  }
+  return tagCache[t]
+}
 
 const {
   GITHUB_ACCOUNT,
@@ -152,7 +238,7 @@ const getReleaseList = async (config) => {
 
   if (error) return Promise.reject(error)
 
-  repos[repo].releases = releases
+  repos[repo].releases = releases.filter((r) => !r.draft)
 
   return Promise.resolve(releases)
 }
@@ -171,19 +257,19 @@ const latestByChannel = async (config) => {
 
   const setLatestForChannel = (release, channel) => {
     release.channel = channel = channel.toLowerCase()
-    const currentTag = (channels[channel] || {}).tag_name
-    if (currentTag && semver.gt(currentTag, release.tag_name)) return
+    const currentTag = toSemver((channels[channel] || {}).tag_name)
+    if (currentTag.valid && currentTag.gt(release.tag_name)) return
     channels[channel] = release
   }
 
   releases.forEach((r) => {
     const { tag_name: tag } = r
-    const cleanTag = semver.valid(tag)
+    const semver = toSemver(tag)
 
-    if (!cleanTag) return
+    if (!semver.valid) return
 
     const tagMeta = tag.indexOf('+') >= 0 ? tag.slice(tag.indexOf('+') + 1) : ''
-    const tagPreAry = semver.prerelease(cleanTag) || []
+    const tagPreAry = semver.prerelease || []
     const tagPre = tagPreAry.find((p) => Number.isNaN(+p))
     const rlsPre = r.prerelease ? `prerelease` : null
 
@@ -252,7 +338,7 @@ const getVersion = (config, path, channel, action, platform) => {
   const ch = channel.channel ? `/${channel.channel}` : ''
   const cut = `/${action === 'release' ? 'update' : action}${ch}/${platform}`
   const tmpPath = path.indexOf(cut) ? path : path.slice(cut.length + 1)
-  const version = semver.valid(tmpPath.split('/')[0])
+  const version = toSemver(tmpPath.split('/')[0]).valid
 
   repo.cacheByPath.version[path] = version
 
@@ -411,7 +497,7 @@ const requestHandler = async (config) => {
     if (!platform && !query.filename) return noContent(res)
 
     const version = getVersion(config, pathLower, channel, action, platform)
-    const samesies = version && semver.eq(channel.tag_name, version)
+    const samesies = version && toSemver(channel.tag_name).eq(version)
 
     if (samesies && action !== 'release') return noContent(res)
 

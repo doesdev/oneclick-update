@@ -33,12 +33,10 @@
     "url": "https://github.com/doesdev/oneclick-update/issues"
   },
   "homepage": "https://github.com/doesdev/oneclick-update#readme",
-  "dependencies": {
-    "jao": "^1.0.0",
+  "dependencies": {},
+  "devDependencies": {
+    "mvt": "^1.1.0",
     "semver": "^5.6.0",
     "tiny-params": "^2.1.0"
-  },
-  "devDependencies": {
-    "mvt": "^1.1.0"
   }
 }
