@@ -8,6 +8,14 @@ const platforms = ['win32', 'darwin']
 const allowedRoots = { download: true, update: true, changelog: false }
 const defaultPort = 8082
 
+/* ROUTES
+  /
+  /download[/channel]
+  /download[/channel]/:platform
+  /update[/channel]/:platform/:version
+  /update[/channel]/win32/:version/RELEASES
+*/
+
 const parseQs = (url) => {
   if (!url) return {}
   const qIdx = url.indexOf('?')
@@ -553,14 +561,6 @@ const requestHandler = async (config) => {
 
       return res.end(releases)
     }
-
-    /* ROUTES
-      /
-      /download[/channel]
-      /download[/channel]/:platform
-      /update[/channel]/:platform/:version
-      /update[/channel]/win32/:version/RELEASES
-    */
   }
 }
 

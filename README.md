@@ -22,7 +22,7 @@
 Just running as a server, use any of these options to download the script. It's standalone.
 
 - [CLICK HERE](https://raw.githubusercontent.com/doesdev/oneclick-update/master/index.js)
-- `curl -XGET 'https://raw.githubusercontent.com/doesdev/oneclick-update/master/index.js'`
+- `curl -o oneclick.js https://raw.githubusercontent.com/doesdev/oneclick-update/master/index.js`
 - `git clone https://github.com/doesdev/oneclick-update`
 
 If you're using it as a module, you know the drill.
@@ -30,6 +30,22 @@ If you're using it as a module, you know the drill.
 `npm i -s oneclick-update`
 
 ## Usage
+
+Just running as a server, couldn't be simpler
+
+```sh
+curl -o oneclick.js https://raw.githubusercontent.com/doesdev/oneclick-update/master/index.js
+SET GITHUB_REPO=doesdev/oneclick-release-test
+node oneclick.js
+```
+
+Using a private repo, also simple.
+```sh
+curl -o oneclick.js https://raw.githubusercontent.com/doesdev/oneclick-update/master/index.js
+curl -o secrets.json https://raw.githubusercontent.com/doesdev/oneclick-update/master/secrets.example.json
+# modify the secrets.json file with your Github oauth token, repo, port, and return URL
+node oneclick.js
+```
 
 ## Routes
 
