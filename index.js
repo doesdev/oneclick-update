@@ -7,6 +7,7 @@ const repos = {}
 const platforms = ['win32', 'darwin']
 const allowedRoots = { download: true, update: true, changelog: false }
 const defaultPort = 8082
+const defaultInterval = '15 mins'
 
 /* ROUTES
   /
@@ -34,6 +35,13 @@ const parseQs = (url) => {
     else obj[q[0]] = [obj[q[0]]].concat([q[1]])
   })
   return obj
+}
+
+const intvls = { s: 1000, m: 60000, h: 3600000, d: 86400000 }
+const picoMs = (str) => {
+  const num = parseFloat(str)
+  const intvl = `${str}`.replace(`${num}`, '').trim().charAt(0)
+  return num * (intvls[intvl] || 1)
 }
 
 const semverRgx = new RegExp(
@@ -112,7 +120,8 @@ const {
   GITHUB_REPO,
   GITHUB_OAUTH_TOKEN,
   SERVER_URL,
-  PORT
+  PORT,
+  REFRESH_INTERVAL
 } = process.env
 
 const contentType = {
@@ -192,6 +201,7 @@ const isPrivate = async (repo, token) => {
 }
 
 const initCacheForRepo = (repo) => {
+  repo.lastCacheRefresh = Date.now()
   repo.resetCache = () => initCacheForRepo(repo)
   repo.cache = {
     channel: {},
@@ -206,6 +216,8 @@ const getConfig = async (configIn = {}) => {
   if (repos[configIn.repos]) return configIn
 
   const config = Object.assign({}, configIn)
+  const intervalStr = (config.refreshInterval || REFRESH_INTERVAL || '').trim()
+  config.refreshInterval = picoMs(intervalStr || defaultInterval)
   config.port = (config.port || PORT || '').toString().trim() || defaultPort
   config.serverUrl = (config.serverUrl || SERVER_URL || '').trim()
   config.token = (config.token || GITHUB_OAUTH_TOKEN || '').trim()
@@ -499,13 +511,7 @@ const requestHandler = async (config) => {
   }
 
   const repo = repos[config.repo]
-
   let { serverUrl } = config
-
-  const noContent = (res) => {
-    res.statusCode = 204
-    return res.end()
-  }
 
   return async (req, res) => {
     const { headers } = req
@@ -513,12 +519,16 @@ const requestHandler = async (config) => {
     const [path] = (req.url.length < 2 ? '/download' : req.url).split('?')
     const pathLower = path.toLowerCase()
 
-    if (!allowedRoots[path.split('/')[1]]) return noContent(res)
-
-    const finish = (location) => {
+    const finish = (location, noContent) => {
       if (location) res.writeHead(302, { Location: location })
+      if (noContent) res.statusCode = 204
       return res.end()
     }
+
+    if (!allowedRoots[path.split('/')[1]]) return finish(null, true)
+
+    const nextRefresh = repo.lastCacheRefresh + config.refreshInterval
+    if (nextRefresh < Date.now()) repo.resetCache()
 
     if (repo.private && !serverUrl) {
       serverUrl = getServerUrl(repo, pathLower, req)
@@ -527,7 +537,7 @@ const requestHandler = async (config) => {
         const err = new Error('Unable to determine serverUrl for private repo')
         console.error(err)
 
-        return noContent(res)
+        return finish(null, true)
       }
     }
 
@@ -539,20 +549,20 @@ const requestHandler = async (config) => {
 
     const channel = getChannel(repo, channels, pathLower)
 
-    if (!channel) return noContent(res)
+    if (!channel) return finish(null, true)
 
     const platform = getPlatform(config, pathLower, channel, action, headers)
 
-    if (!platform && !query.filename) return noContent(res)
+    if (!platform && !query.filename) return finish(null, true)
 
     const version = getVersion(config, pathLower, channel, action, platform)
     const samesies = version && toSemver(channel.tag_name).eq(version)
 
-    if (samesies && action !== 'release') return noContent(res)
+    if (samesies && action !== 'release') return finish(null, true)
 
     const asset = getPlatformAsset(config, channel, platform, action, query)
 
-    if (!asset) return noContent(res)
+    if (!asset) return finish(null, true)
 
     if (action === 'download') {
       if (!repo.private) return finish(asset.browser_download_url)
