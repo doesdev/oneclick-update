@@ -121,7 +121,7 @@ const {
   GITHUB_OAUTH_TOKEN,
   SERVER_URL,
   PORT,
-  REFRESH_INTERVAL
+  REFRESH_CACHE
 } = process.env
 
 const contentType = {
@@ -216,8 +216,8 @@ const getConfig = async (configIn = {}) => {
   if (repos[configIn.repos]) return configIn
 
   const config = Object.assign({}, configIn)
-  const intervalStr = (config.refreshInterval || REFRESH_INTERVAL || '').trim()
-  config.refreshInterval = picoMs(intervalStr || defaultInterval)
+  const intvl = (config.refreshCache || REFRESH_CACHE || '').toString().trim()
+  config.refreshCache = picoMs(intvl || defaultInterval)
   config.port = (config.port || PORT || '').toString().trim() || defaultPort
   config.serverUrl = (config.serverUrl || SERVER_URL || '').trim()
   config.token = (config.token || GITHUB_OAUTH_TOKEN || '').trim()
@@ -527,7 +527,7 @@ const requestHandler = async (config) => {
 
     if (!allowedRoots[path.split('/')[1]]) return finish(null, true)
 
-    const nextRefresh = repo.lastCacheRefresh + config.refreshInterval
+    const nextRefresh = repo.lastCacheRefresh + config.refreshCache
     if (nextRefresh < Date.now()) repo.resetCache()
 
     if (repo.private && !serverUrl) {
