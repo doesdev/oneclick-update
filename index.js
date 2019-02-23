@@ -467,7 +467,7 @@ const getReleasesFile = async (config, channel, asset, platform, version) => {
 
   const { serverUrl } = config
   const url = repo.private ? asset.url : asset.browser_download_url
-  const headers = ghHeader(repo.private ? config.token : null, 'octet')
+  const headers = ghHeader(config.token, 'octet')
   const { data } = await simpleGet(url, { headers })
 
   const getPrivateUrl = (v) => {
