@@ -16,6 +16,8 @@ const defaultPort = 8082
   /update[/channel]/win32/:version/RELEASES
 */
 
+const filterJoin = (ary, joinWith = '') => ary.filter((v) => v).join(joinWith)
+
 const parseQs = (url) => {
   if (!url) return {}
   const qIdx = url.indexOf('?')
@@ -191,7 +193,13 @@ const isPrivate = async (repo, token) => {
 
 const initCacheForRepo = (repo) => {
   repo.resetCache = () => initCacheForRepo(repo)
-  repo.cacheByPath = { channel: {}, platform: {}, serverUrl: {}, version: {} }
+  repo.cache = {
+    channel: {},
+    platform: {},
+    serverUrl: {},
+    version: {},
+    releaseFile: {}
+  }
 }
 
 const getConfig = async (configIn = {}) => {
@@ -281,7 +289,7 @@ const latestByChannel = async (config) => {
     const tagPre = tagPreAry.find((p) => Number.isNaN(+p))
     const rlsPre = r.prerelease ? `prerelease` : null
 
-    const channel = [tagMeta, tagPre, rlsPre].filter((c) => c).join('/')
+    const channel = filterJoin([tagMeta, tagPre, rlsPre], '/')
     setLatestForChannel(r, channel)
   })
 
@@ -298,7 +306,7 @@ const guessPlatform = (ua = '') => {
 }
 
 const getChannel = (repo, channels, pathLower) => {
-  const cached = repo.cacheByPath.channel[pathLower]
+  const cached = repo.cache.channel[pathLower]
   if (cached) return cached
 
   let channel
@@ -312,7 +320,7 @@ const getChannel = (repo, channels, pathLower) => {
   })
 
   channel = channel || channels['']
-  repo.cacheByPath.channel[pathLower] = channel
+  repo.cache.channel[pathLower] = channel
 
   return channel
 }
@@ -320,7 +328,7 @@ const getChannel = (repo, channels, pathLower) => {
 const getPlatform = (config, path, channel, action, headers) => {
   const useCache = action !== 'download'
   const repo = repos[config.repo]
-  const cached = useCache ? repo.cacheByPath.platform[path] : null
+  const cached = useCache ? repo.cache.platform[path] : null
 
   if (cached) return cached
 
@@ -332,14 +340,14 @@ const getPlatform = (config, path, channel, action, headers) => {
   const pathPlatform = valid(tmpPath.split('/')[0])
   const platform = pathPlatform || guessPlatform(headers['user-agent'])
 
-  if (pathPlatform && useCache) repo.cacheByPath.platform[path] = platform
+  if (pathPlatform && useCache) repo.cache.platform[path] = platform
 
   return platform
 }
 
 const getVersion = (config, path, channel, action, platform) => {
   const repo = repos[config.repo]
-  const cached = repo.cacheByPath.version[path]
+  const cached = repo.cache.version[path]
 
   if (cached || action === 'download') return cached
 
@@ -348,13 +356,13 @@ const getVersion = (config, path, channel, action, platform) => {
   const tmpPath = path.indexOf(cut) ? path : path.slice(cut.length + 1)
   const version = toSemver(tmpPath.split('/')[0]).valid
 
-  repo.cacheByPath.version[path] = version
+  repo.cache.version[path] = version
 
   return version
 }
 
 const getServerUrl = (repo, pathLower, req) => {
-  const cached = repo.cacheByPath.serverUrl[pathLower]
+  const cached = repo.cache.serverUrl[pathLower]
   if (cached) return cached
 
   const { socket } = req
@@ -363,7 +371,7 @@ const getServerUrl = (repo, pathLower, req) => {
   if (!req.headers.host) return
 
   const serverUrl = `${unsecure ? 'http' : 'https'}://${req.headers.host}`
-  repo.cacheByPath.serverUrl[pathLower] = serverUrl
+  repo.cache.serverUrl[pathLower] = serverUrl
 
   return serverUrl
 }
@@ -433,7 +441,7 @@ const getPlatformAsset = (config, channel, platform, action, query) => {
   const ext = query.filetype
   const file = query.filename
 
-  // const cached = repo.cacheByPath.platformAsset[pathLower]
+  // const cached = repo.cache.platformAsset[pathLower]
   const assets = channel.assets.slice(0)
   let asset
 
@@ -448,6 +456,39 @@ const getPlatformAsset = (config, channel, platform, action, query) => {
   asset = asset || platformFilters[platform](assets, action, arch, ext)
 
   return asset
+}
+
+const getReleasesFile = async (config, channel, asset, platform, version) => {
+  const cacheKey = filterJoin([config.repo, channel, platform, asset.tag_name])
+  const repo = repos[config.repo]
+  const cached = repo.cache.releaseFile[cacheKey]
+
+  if (cached) return cached
+
+  const { serverUrl } = config
+  const url = repo.private ? asset.url : asset.browser_download_url
+  const headers = ghHeader(repo.private ? config.token : null, 'octet')
+  const { data } = await simpleGet(url, { headers })
+
+  const getPrivateUrl = (v) => {
+    const urlEls = [serverUrl, 'download', channel.channel, platform, version]
+    const urlOut = filterJoin(urlEls, '/')
+    return encodeURI(`${urlOut}?filename=${v}`)
+  }
+
+  const getUrlOut = repo.private ? getPrivateUrl : (v) => {
+    const nupkg = channel.assets.find((a) => a.name === v)
+    if (!nupkg || !nupkg.browser_download_url) return getPrivateUrl(v)
+    return nupkg.browser_download_url
+  }
+
+  const releases = data.split('\n').map((l) => {
+    return l.split(' ').map((v, i) => i === 1 ? getUrlOut(v) : v).join(' ')
+  }).join('\n')
+
+  repo.cache.releaseFile[cacheKey] = releases
+
+  return releases
 }
 
 const requestHandler = async (config) => {
@@ -539,25 +580,8 @@ const requestHandler = async (config) => {
     }
 
     if (action === 'release') {
-      const url = repo.private ? asset.url : asset.browser_download_url
-      const headers = ghHeader(repo.private ? config.token : null, 'octet')
-      const { data } = await simpleGet(url, { headers })
-
-      const getPrivateUrl = (v) => {
-        const urlEls = [serverUrl, 'download', channel.channel, platform, version]
-        const urlOut = urlEls.filter((p) => p).join('/')
-        return encodeURI(`${urlOut}?filename=${v}`)
-      }
-
-      const getUrlOut = repo.private ? getPrivateUrl : (v) => {
-        const nupkg = channel.assets.find((a) => a.name === v)
-        if (!nupkg || !nupkg.browser_download_url) return getPrivateUrl(v)
-        return nupkg.browser_download_url
-      }
-
-      const releases = data.split('\n').map((l) => {
-        return l.split(' ').map((v, i) => i === 1 ? getUrlOut(v) : v).join(' ')
-      }).join('\n')
+      const args = [config, channel, asset, platform, version]
+      const releases = await getReleasesFile(...args)
 
       return res.end(releases)
     }
