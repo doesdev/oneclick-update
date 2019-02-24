@@ -259,7 +259,7 @@ const getReleaseList = async (config) => {
 
   repos[repo].releases = releases.filter((r) => !r.draft)
 
-  return Promise.resolve(releases)
+  return Promise.resolve(repos[repo].releases)
 }
 
 const latestByChannel = async (config) => {
