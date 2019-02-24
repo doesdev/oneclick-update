@@ -225,6 +225,7 @@ const getConfig = async (configIn = {}) => {
   config.project = (config.project || GITHUB_PROJECT || '').trim()
   config.repo = (config.repo || GITHUB_REPO || '').trim()
   config.platformFilters = config.platformFilters || {}
+  config.hostToChannel = config.hostToChannel || {}
 
   if (!config.repo) {
     if (!(config.account && config.project)) throw new Error(`Repo is required`)
@@ -470,26 +471,34 @@ const getPlatformAsset = (config, channel, platform, action, query) => {
   return asset
 }
 
-const getReleasesFile = async (config, channel, asset, platform, version) => {
-  const cacheKey = filterJoin([config.repo, channel, platform, asset.tag_name])
+const getReleasesFile = async (
+  config,
+  channel,
+  asset,
+  platform,
+  version,
+  serverUrl
+) => {
+  const { channel: chName, assets } = channel
+  const cacheKeyAry = [config.repo, chName, platform, asset.tag_name, serverUrl]
+  const cacheKey = filterJoin(cacheKeyAry)
   const repo = repos[config.repo]
   const cached = repo.cache.releaseFile[cacheKey]
 
   if (cached) return cached
 
-  const { serverUrl } = config
   const url = repo.private ? asset.url : asset.browser_download_url
   const headers = ghHeader(config.token, 'octet')
   const { data } = await simpleGet(url, { headers })
 
   const getPrivateUrl = (v) => {
-    const urlEls = [serverUrl, 'download', channel.channel, platform, version]
+    const urlEls = [serverUrl, 'download', chName, platform, version]
     const urlOut = filterJoin(urlEls, '/')
     return encodeURI(`${urlOut}?filename=${v}`)
   }
 
   const getUrlOut = repo.private ? getPrivateUrl : (v) => {
-    const nupkg = channel.assets.find((a) => a.name === v)
+    const nupkg = assets.find((a) => a.name === v)
     if (!nupkg || !nupkg.browser_download_url) return getPrivateUrl(v)
     return nupkg.browser_download_url
   }
@@ -530,6 +539,9 @@ const requestHandler = async (config) => {
     const nextRefresh = repo.lastCacheRefresh + config.refreshCache
     if (nextRefresh < Date.now()) repo.resetCache()
 
+    const hostConfig = config.hostToChannel[req.headers.host] || {}
+    serverUrl = hostConfig.serverUrl || serverUrl
+
     if (repo.private && !serverUrl) {
       serverUrl = getServerUrl(repo, pathLower, req)
 
@@ -547,7 +559,8 @@ const requestHandler = async (config) => {
 
     const channels = await latestByChannel(config)
 
-    const channel = getChannel(repo, channels, pathLower)
+    const hostChannel = channels[hostConfig.name]
+    const channel = hostChannel || getChannel(repo, channels, pathLower)
 
     if (!channel) return finish(null, true)
 
@@ -590,7 +603,7 @@ const requestHandler = async (config) => {
     }
 
     if (action === 'release') {
-      const args = [config, channel, asset, platform, version]
+      const args = [config, channel, asset, platform, version, serverUrl]
       const releases = await getReleasesFile(...args)
 
       return res.end(releases)

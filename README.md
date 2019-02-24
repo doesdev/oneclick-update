@@ -48,7 +48,34 @@ node oneclick.js
 
 ## Routes
 
+- `/download[/channel]`
+- `/download[/channel]/:platform`
+- `/update[/channel]/:platform/:version`
+- `/update[/channel]/win32/:version/RELEASES`
+
 ## API
+
+```js
+const { requestHandler } = require('oneclick-update')
+const config = {
+  repo: 'doesdev/oneclick-release-test',
+  port: 8082,
+  token: 'yourGithubOauthToken',
+  serverUrl: 'https://updates.example.com',
+  refreshCache: '15 mins',
+  platformFilters: {},
+  hostToChannel: {}
+}
+
+const startServer = async () => {
+  const handler = await requestHandler(config)
+  createServer(handler).listen(config.port, () => {
+    console.log(`Update server running on port ${config.port}`)
+  })
+}
+
+startServer()
+```
 
 ## License
 
