@@ -32,7 +32,7 @@
   "bugs": {
     "url": "https://github.com/doesdev/oneclick-update/issues"
   },
-  "homepage": "http://oneclick-update.doesdev.com",
+  "homepage": "https://oneclick-update.doesdev.com",
   "dependencies": {},
   "devDependencies": {
     "mvt": "^1.1.0",
