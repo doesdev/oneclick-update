@@ -4,7 +4,7 @@ const userAgent = `oneclick-update`
 const { get: httpGet, createServer } = require('http')
 const { get: httpsGet } = require('https')
 const repos = {}
-const platforms = ['win32', 'darwin']
+const platforms = ['win32', 'darwin', 'linux']
 const allowedRoots = { download: true, update: true, changelog: false }
 const defaultPort = 8082
 const defaultInterval = '15 mins'
@@ -424,18 +424,21 @@ const platformFilters = {
 
     return actions[action] ? actions[action]() : null
   },
-  darwin: (assets, action = 'download', arch, ext = 'dmg') => {
-    const download = () => {
-      let asset
-      if (ext === 'dmg' && (asset = filterByExt(assets, 'dmg')[0])) return asset
+  darwin: (assetsIn, action = 'download', arch = 'x64', ext) => {
+    const osxExts = ['dmg', 'pkg', 'zip']
 
-      if ((assets = filterByExt(assets, 'zip')).length < 2) return assets[0]
+    const download = (noExt) => {
+      let assets = assetsIn.filter(({ name }) => name.indexOf('symbols') === -1)
 
-      assets = assets.filter((a) => a.name.match(/mac|osx|darwin/i))
+      if (ext === 'zip' && !noExt) {
+        assets = assets.filter((a) => a.name.match(/mac|osx|darwin/i))
+      }
 
-      if (assets.length < 2) return assets[0]
+      if (ext && !noExt) return filterByExt(assets, ext)[0] || download(true)
 
-      return assets.filter((a) => a.name.indexOf('symbols') === -1)[0]
+      return osxExts.map((extName) => {
+        return firstForArch(filterByExt(assets, extName), arch)
+      }).filter((v) => v)[0]
     }
 
     const update = () => {
@@ -446,6 +449,23 @@ const platformFilters = {
     const actions = { download, update }
 
     return actions[action] ? actions[action]() : null
+  },
+  linux: (assets, action = 'download', arch = 'x64', ext) => {
+    const nixExts = ['deb', 'rpm', 'AppImage', 'gz', 'zip']
+
+    const download = (noExt) => {
+      if (ext === 'zip' && !noExt) {
+        assets = assets.filter((a) => a.name.indexOf('linux') !== -1)
+      }
+
+      if (ext && !noExt) return filterByExt(assets, ext)[0] || download(true)
+
+      return nixExts.map((extName) => {
+        return firstForArch(filterByExt(assets, extName), arch)
+      }).filter((v) => v)[0]
+    }
+
+    return download()
   }
 }
 

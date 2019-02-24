@@ -2,6 +2,7 @@
 
 const { runTests, start, finish, test, testAsync } = require('mvt')
 const http = require('http')
+const path = require('path')
 const semver = require('semver')
 const qs = require('tiny-params')
 const {
@@ -32,6 +33,7 @@ runTests(async () => {
     const config = isPublic ? publicConfig : secrets
     const metaChannel = isPublic ? 'vendor-a' : null
     const preChannel = isPublic ? 'prerelease' : null
+    const useLinux = isPublic
 
     let latest, notLatest, randomAsset
 
@@ -69,15 +71,16 @@ runTests(async () => {
       return true
     })
 
-    const getServerResponse = async (
+    const getServerResponse = async ({
       action,
       channel,
       platform,
       version,
       redirect,
       filename,
-      release
-    ) => {
+      release,
+      filetype
+    }) => {
       const server = http.createServer(await requestHandler(config))
       await new Promise((resolve, reject) => server.listen(resolve))
       const port = server.address().port
@@ -88,7 +91,11 @@ runTests(async () => {
         version,
         release ? 'RELEASES' : null
       ].filter((v) => v).join('/')
-      const q = filename ? `?filename=${filename}` : ''
+      let qEls = [
+        filename ? `filename=${filename}` : null,
+        filetype ? `filetype=${filetype}` : null
+      ].filter((v) => v)
+      const q = qEls.length ? `?${qEls.join('&')}` : ''
       const url = `http://localhost:${port}/${path}${q}`
       const result = await simpleGet(url, { redirect })
 
@@ -97,10 +104,19 @@ runTests(async () => {
       return result
     }
 
-    const testPlatformDownload = async (platform, expectNoContent) => {
+    const testPlatformDownload = async (
+      platform,
+      ext,
+      expectNoContent,
+      forceExt
+    ) => {
       const host = isPublic ? 'github.com' : 'amazonaws.com'
       const action = 'download'
-      const result = await getServerResponse(action, null, platform, null, false)
+      const redirect = false
+      const filetype = forceExt ? ext : null
+      const args = { action, platform, redirect, filetype }
+      const result = await getServerResponse(args)
+      const location = result.headers.location
 
       if (expectNoContent) {
         return test(`[${type}] download expecting no content for ${platform}`,
@@ -115,29 +131,52 @@ runTests(async () => {
       )
 
       test(`[${type}] download for ${platform} redirects to ${host}`,
-        (new URL(result.headers.location)).hostname.slice(-host.length),
+        (new URL(location)).hostname.slice(-host.length),
         host
+      )
+
+      let resultFile
+      if (isPublic) {
+        resultFile = location.slice(location.lastIndexOf('/') + 1)
+      } else {
+        const meta = qs(location)['response-content-disposition']
+        resultFile = meta.split('filename=')[1]
+      }
+
+      test(`[${type}] download for ${platform} is expected filetype`,
+        path.extname(resultFile).slice(1),
+        ext
       )
 
       return true
     }
 
     await testAsync(`[${type}] requestHandler download/win32`, () => {
-      return testPlatformDownload('win32')
+      return testPlatformDownload('win32', 'exe')
     })
 
     await testAsync(`[${type}] requestHandler download/darwin`, () => {
-      return testPlatformDownload('darwin')
+      return testPlatformDownload('darwin', 'dmg')
     })
 
+    if (useLinux) {
+      await testAsync(`[${type}] requestHandler download/linux`, () => {
+        return testPlatformDownload('linux', 'deb')
+      })
+
+      await testAsync(`[${type}] requestHandler download/linux as rpm`, () => {
+        return testPlatformDownload('linux', 'rpm', null, true)
+      })
+    }
+
     await testAsync(`[${type}] download fails with no content`, () => {
-      return testPlatformDownload('notaplatform', true)
+      return testPlatformDownload('notaplatform', null, true)
     })
 
     await testAsync(`[${type}] download specific file works`, async () => {
-      const file = randomAsset.name
-      const args = ['download', null, null, null, false, file]
-      const result = await getServerResponse(...args)
+      const filename = randomAsset.name
+      const args = { action: 'download', filename, redirect: false }
+      const result = await getServerResponse(args)
       const location = result.headers.location
       let resultFile
 
@@ -148,13 +187,22 @@ runTests(async () => {
         resultFile = meta.split('filename=')[1]
       }
 
-      return test(`[${type}] redirect url points to filename`, file, resultFile)
+      return test(`[${type}] redirect url points to filename`,
+        filename,
+        resultFile
+      )
     })
 
-    const testPlatformUpdate = async (platform, expectNoContent, version) => {
+    const testPlatformUpdate = async (
+      platform,
+      expectNoContent,
+      version,
+      urlIncludes
+    ) => {
       const { serverUrl } = config
       const host = isPublic ? 'github.com' : (new URL(serverUrl)).hostname
-      const result = await getServerResponse('update', null, platform, version)
+      const args = { action: 'update', platform, version }
+      const result = await getServerResponse(args)
       const { data } = result
 
       if (expectNoContent) {
@@ -169,6 +217,14 @@ runTests(async () => {
         'string'
       )
 
+      if (urlIncludes) {
+        test(`[${type}] update for ${platform} url includes expected string`,
+          data.url.indexOf(urlIncludes) !== -1,
+          undefined,
+          { url: data.url, shouldInclude: urlIncludes }
+        )
+      }
+
       test(`[${type}] update for ${platform} contains expected url`,
         (new URL(data.url)).hostname.slice(-host.length),
         host
@@ -178,12 +234,21 @@ runTests(async () => {
     }
 
     await testAsync(`[${type}] requestHandler update/win32`, () => {
-      return testPlatformUpdate('win32')
+      const shouldInclude = isPublic ? '.exe' : '/win32'
+      return testPlatformUpdate('win32', null, null, shouldInclude)
     })
 
     await testAsync(`[${type}] requestHandler update/darwin`, () => {
-      return testPlatformUpdate('darwin')
+      const shouldInclude = isPublic ? '.zip' : '/darwin'
+      return testPlatformUpdate('darwin', null, null, shouldInclude)
     })
+
+    if (useLinux) {
+      await testAsync(`[${type}] requestHandler update/darwin`, () => {
+        const shouldInclude = isPublic ? '.deb' : '/linux'
+        return testPlatformUpdate('linux', null, null, shouldInclude)
+      })
+    }
 
     await testAsync(`[${type}] update returns no content for bad platform`, () => {
       return testPlatformUpdate('notaplatform', true)
@@ -200,8 +265,14 @@ runTests(async () => {
     await testAsync(`[${type}] RELEASES gets expected data`, async () => {
       const { serverUrl } = config
       const expectHost = isPublic ? 'github.com' : (new URL(serverUrl)).hostname
-      const args = ['update', null, 'win32', notLatest, true, null, true]
-      const { data } = await getServerResponse(...args)
+      const args = {
+        action: 'update',
+        platform: 'win32',
+        version: notLatest,
+        redirect: true,
+        release: true
+      }
+      const { data } = await getServerResponse(args)
       const firstLine = data.split('\n')[0]
       const split = firstLine.split(' ')
       const [hash, url, size] = split

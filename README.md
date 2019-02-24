@@ -29,33 +29,16 @@ It similarly handles prerelease channels, even prereleases on alternate channels
 
 ## Why use this over [hazel](https://github.com/zeit/hazel), [nuts](https://github.com/GitbookIO/nuts), etc...
 
-#### TL;DR (in order of design priorities)
+Both nuts and hazel are excellent libraries. That being said, here are some of the reasons you might use this instead.
 
-- private repos are a first class citizen, not an afterthought
-- it handles multiple builds of the same version (i.e. vendor specific builds)
-- it has separate prerelease channels, even vendor specific prerelease channels
-- it allows user defined platforms, for custom asset filtering
+- Private repos are a first class citizen, not an afterthought
+- It handles multiple builds of the same version (i.e. vendor specific builds)
+- It has separate prerelease channels, even vendor specific prerelease channels
+- It prioritizes `.dmg` or `.pkg` files for `download/darwin` route
+- It allows user defined platforms, for custom asset filtering
 - It's a singular standalone script
 - It has exactly 0 dependencies
-- Serves `DMG` files for `download/darwin` routes
-- It is maintained
-
-#### Respect where due
-
-Both nuts and hazel are great. I used nuts for the last couple years until I ran into some needs it didn't cover. Since it is scarcely maintained I thought I would patch in those needs to another library, hazel. That worked, but still left some things out I desired and patching those in would require major design changes that wouldn't make sense as a first time contributor to the project. I'm in a crunch to get out features and a fresh lib made the most sense to me.
-
-All that to say, either is probably sufficient for most needs. Now that I've gotten that out of the way, the TL;DR above is why this ~~library~~ script is totes better ;)
-
-
-## Where it is lacking
-
-It currently only has built-in support for OSX and Windows. There are two reasons for this.
-
-Firstly, the projects I need it for don't require \*nix builds.
-
-Secondly, I have had difficulty finding consistent patterns in how \*nix builds are distributed amongst the Squirrel / Electron type of update libs.
-
-Pull requests are very welcome or even just some guidance on common \*nix update distribution patterns.
+- It is actively maintained
 
 ## Install
 
@@ -118,8 +101,13 @@ const config = {
   token: 'yourGithubOauthToken',
   serverUrl: 'https://updates.example.com',
   refreshCache: '15 mins',
-  platformFilters: {},
+  platformFilters: { /* see Platforms below for details */ },
   hostToChannel: {
+    /*
+      The `hostToChannel` option allows you to treat the hostname as a channel.
+      That means you can have `updates.example.com` handle the primary channel
+      and `updates.otherhost.com` handle the `otherhost` channel
+    */
     'updates.otherhost.com': {
       name: 'otherhost',
       serverUrl: 'https://updates.otherhost.com'
@@ -136,6 +124,31 @@ const startServer = async () => {
 
 startServer()
 ```
+
+## Platforms
+
+Natively supports Windows, OSX and Linux.
+
+Currently arch specification is not fully implemented. That being said you can create your own platform extensions that filter assets as you desire. The intent is to support arch specification natively, but in the interim it could be implemented something like this (assuming you've named Windows x64 assets with `win64` in the name).
+
+```js
+const config = {
+  platformFilters: {
+    win64: (assets, action) => {
+      return assets.find((a) => a.name.indexOf('win64') !== -1)
+    }
+  }
+}
+```
+
+Similarly you can define any custom platform filtering that you would like. The expectation is the key is what would be specified in the platform part of the URL and the value is a function that filters the assets to the one you would like to use.
+
+The signature of the filtering function is `(assets, action, arch, extension)`
+
+- `assets: Array` - list of Github release assets, the `name` property of each is the filename
+- `action: String` - name of current action (`download` or `update`)
+- `arch: String` - this is not currently passed, once arch is implemented it will be
+- `extension: String` - if extension is specified via querystring, this is it (i.e. `?filetype=dmg` -> `dmg`)
 
 ## License
 
