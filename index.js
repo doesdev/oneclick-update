@@ -8,14 +8,9 @@ const platforms = ['win32', 'darwin', 'linux']
 const allowedRoots = { download: true, update: true, changelog: false }
 const defaultPort = 8082
 const defaultInterval = '15 mins'
-
-/* ROUTES
-  /
-  /download[/channel]
-  /download[/channel]/:platform
-  /update[/channel]/:platform/:version
-  /update[/channel]/win32/:version/RELEASES
-*/
+const events = {}
+const on = (evtName, cb) => { events[evtName] = cb }
+const off = (evtName) => { delete events[evtName] }
 
 const filterJoin = (ary, joinWith = '') => ary.filter((v) => v).join(joinWith)
 
@@ -115,13 +110,12 @@ const toSemver = (t = '') => {
 }
 
 const {
-  GITHUB_ACCOUNT,
-  GITHUB_PROJECT,
   GITHUB_REPO,
   GITHUB_OAUTH_TOKEN,
   SERVER_URL,
   PORT,
-  REFRESH_CACHE
+  REFRESH_CACHE,
+  LOG_DOWNLOADS
 } = process.env
 
 const contentType = {
@@ -221,16 +215,12 @@ const getConfig = async (configIn = {}) => {
   config.port = (config.port || PORT || '').toString().trim() || defaultPort
   config.serverUrl = (config.serverUrl || SERVER_URL || '').trim()
   config.token = (config.token || GITHUB_OAUTH_TOKEN || '').trim()
-  config.account = (config.account || GITHUB_ACCOUNT || '').trim()
-  config.project = (config.project || GITHUB_PROJECT || '').trim()
   config.repo = (config.repo || GITHUB_REPO || '').trim()
+  config.logDownloads = !!(config.logDownloads || LOG_DOWNLOADS)
   config.platformFilters = config.platformFilters || {}
   config.hostToChannel = config.hostToChannel || {}
 
-  if (!config.repo) {
-    if (!(config.account && config.project)) throw new Error(`Repo is required`)
-    config.repo = `${config.account}/${config.project}`
-  }
+  if (!config.repo) throw new Error(`Repo is required`)
 
   if (config.repo.indexOf('github.com/') !== -1) {
     config.repo = config.repo.replace(/.*github.com\//, '')
@@ -598,6 +588,28 @@ const requestHandler = async (config) => {
     if (!asset) return finish(null, true)
 
     if (action === 'download') {
+      const hasDlListener = typeof events.download === 'function'
+      if ((hasDlListener || config.logDownloads) && asset.name !== 'RELEASES') {
+        const connection = req.connection || {}
+        const ip = req.headers['x-forwarded-for'] || connection.remoteAddress
+        const args = {
+          ip,
+          requestUrl: req.url,
+          asset: asset.name,
+          channel: channel.channel,
+          platform,
+          version: channel.tag_name
+        }
+
+        if (hasDlListener) events.download(args)
+        if (config.logDownloads) {
+          const fType = query.filetype
+          const fName = query.filename
+          const info = filterJoin([args.channel, platform, fType, fName], '/')
+          console.log(`Download for ${info}: ${args.asset}`)
+        }
+      }
+
       if (!repo.private) return finish(asset.browser_download_url)
 
       const headers = ghHeader(config.token, 'octet')
@@ -635,7 +647,9 @@ module.exports = {
   getReleaseList,
   latestByChannel,
   requestHandler,
-  simpleGet
+  simpleGet,
+  on,
+  off
 }
 
 if (require.main === module) {

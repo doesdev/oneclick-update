@@ -9,7 +9,9 @@ const {
   getReleaseList,
   latestByChannel,
   requestHandler,
-  simpleGet
+  simpleGet,
+  on,
+  off
 } = require('./index')
 const repo = `doesdev/oneclick-release-test`
 const fullUrlRepo = `https://github.com/doesdev/oneclick-release-test`
@@ -151,9 +153,15 @@ runTests(async () => {
       return true
     }
 
+    let onResult
+    on('download', (r) => { onResult = r })
+
     await testAsync(`[${type}] requestHandler download/win32`, () => {
       return testPlatformDownload('win32', 'exe')
     })
+
+    test(`[${type}] on('download') fires`, onResult.platform, 'win32')
+    off('download')
 
     await testAsync(`[${type}] requestHandler download/darwin`, () => {
       return testPlatformDownload('darwin', 'dmg')

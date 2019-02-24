@@ -76,6 +76,7 @@ node oneclick.js
 - `PORT` - The port you want to run the server on
 - `SERVER_URL` - The URL of the update server (for proxying private release assets)
 - `REFRESH_CACHE` - Interval to check for new releases as string or ms (default `15 mins`)
+- `LOG_DOWNLOADS` - Log downloads to console as `Download for [channel/platform/filename/extension]: [asset]`
 
 ## Routes
 
@@ -94,13 +95,14 @@ Get RELEASES file with `nupkg` download info (Windows only)
 ## API
 
 ```js
-const { requestHandler } = require('oneclick-update')
+const { requestHandler, on } = require('oneclick-update')
 const config = {
   repo: 'doesdev/oneclick-release-test',
   port: 8082,
   token: 'yourGithubOauthToken',
   serverUrl: 'https://updates.example.com',
   refreshCache: '15 mins',
+  logDownloads: false,
   platformFilters: { /* see Platforms below for details */ },
   hostToChannel: {
     /*
@@ -121,6 +123,10 @@ const startServer = async () => {
     console.log(`Update server running on port ${config.port}`)
   })
 }
+
+on('download', ({ ip, requestUrl, asset, channel, platform, version }) => {
+  console.log(`User at ${ip} downloaded ${asset}`)
+})
 
 startServer()
 ```
