@@ -466,17 +466,19 @@ const getPlatformAsset = (config, channel, platform, action, query) => {
 
   // const cached = repo.cache.platformAsset[pathLower]
   const assets = channel.assets.slice(0)
+  const nativePlatform = platformFilters[platform]
+  const userPlatform = config.platformFilters[platform]
   let asset
 
   if (file && (asset = assets.find((a) => a.name === file))) return asset
 
-  if (!config.platformFilters[platform] && !platformFilters[platform]) return
+  if (!userPlatform && !nativePlatform) return
 
-  if (config.platformFilters && config.platformFilters[platform]) {
+  if (userPlatform) {
     asset = config.platformFilters[platform](assets, action, arch, ext)
   }
 
-  asset = asset || platformFilters[platform](assets, action, arch, ext)
+  asset = asset || (nativePlatform || (() => {}))(assets, action, arch, ext)
 
   return asset
 }

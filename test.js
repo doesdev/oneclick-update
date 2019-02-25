@@ -36,6 +36,14 @@ runTests(async () => {
     const metaChannel = isPublic ? 'vendor-a' : null
     const preChannel = isPublic ? 'prerelease' : null
     const useLinux = isPublic
+    const usePlatformFilters = !isPublic
+    const platformFilters = {
+      winsub: (assets, action) => {
+        return assets.find((a) => a.name.indexOf('win-sub') !== -1)
+      }
+    }
+
+    if (usePlatformFilters) config.platformFilters = platformFilters
 
     let latest, notLatest, randomAsset
 
@@ -166,6 +174,12 @@ runTests(async () => {
     await testAsync(`[${type}] requestHandler download/darwin`, () => {
       return testPlatformDownload('darwin', 'dmg')
     })
+
+    if (usePlatformFilters) {
+      await testAsync(`[${type}] platformFilters download/winsub`, () => {
+        return testPlatformDownload('winsub', 'exe')
+      })
+    }
 
     if (useLinux) {
       await testAsync(`[${type}] requestHandler download/linux`, () => {
