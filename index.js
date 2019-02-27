@@ -523,9 +523,9 @@ const requestHandler = async (config) => {
   }
 
   const repo = repos[config.repo]
-  let { serverUrl } = config
 
   return async (req, res) => {
+    let { serverUrl } = config
     const { headers } = req
     const query = parseQs(req.url)
     const [path] = (req.url.length < 2 ? '/download' : req.url).split('?')

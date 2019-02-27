@@ -1,6 +1,6 @@
 {
   "name": "oneclick-update",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Simple installer downloads and update server",
   "main": "index.js",
   "files": [
