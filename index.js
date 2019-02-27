@@ -4,7 +4,7 @@ const userAgent = `oneclick-update`
 const { get: httpGet, createServer } = require('http')
 const { get: httpsGet } = require('https')
 const repos = {}
-const platforms = ['win32', 'darwin', 'linux']
+const platforms = ['win32', 'darwin', 'linux', 'nupkg']
 const allowedRoots = { download: true, update: true, changelog: false }
 const defaultPort = 8082
 const defaultInterval = '15 mins'
@@ -456,7 +456,8 @@ const platformFilters = {
     }
 
     return download()
-  }
+  },
+  nupkg: (assets) => filterByExt(assets, 'nupkg')[0]
 }
 
 const getPlatformAsset = (config, channel, platform, action, query) => {
@@ -483,19 +484,13 @@ const getPlatformAsset = (config, channel, platform, action, query) => {
   return asset
 }
 
-const getReleasesFile = async (
-  config,
-  channel,
-  asset,
-  platform,
-  version,
-  serverUrl
-) => {
+const getReleasesFile = async (config, channel, asset, serverUrl) => {
   const { channel: chName, assets } = channel
-  const cacheKeyAry = [config.repo, chName, platform, asset.tag_name, serverUrl]
+  const cacheKeyAry = [config.repo, chName, asset.tag_name, serverUrl]
   const cacheKey = filterJoin(cacheKeyAry)
   const repo = repos[config.repo]
   const cached = repo.cache.releaseFile[cacheKey]
+  const version = channel.tag_name
 
   if (cached) return cached
 
@@ -503,16 +498,12 @@ const getReleasesFile = async (
   const headers = ghHeader(config.token, 'octet')
   const { data } = await simpleGet(url, { headers })
 
-  const getPrivateUrl = (v) => {
-    const urlEls = [serverUrl, 'download', chName, platform, version]
-    const urlOut = filterJoin(urlEls, '/')
-    return encodeURI(`${urlOut}?filename=${v}`)
-  }
-
-  const getUrlOut = repo.private ? getPrivateUrl : (v) => {
-    const nupkg = assets.find((a) => a.name === v)
-    if (!nupkg || !nupkg.browser_download_url) return getPrivateUrl(v)
-    return nupkg.browser_download_url
+  const getUrlOut = (v) => {
+    const nupkg = assets.find((a) => a.name === v) || {}
+    const { name, browser_download_url: publicUrl } = nupkg
+    if (!repo.private && publicUrl) return publicUrl
+    const urlEls = [serverUrl, 'download', chName, 'nupkg', version, name || v]
+    return encodeURI(filterJoin(urlEls, '/'))
   }
 
   const releases = data.split('\n').map((l) => {
@@ -637,10 +628,7 @@ const requestHandler = async (config) => {
     }
 
     if (action === 'release') {
-      const args = [config, channel, asset, platform, version, serverUrl]
-      const releases = await getReleasesFile(...args)
-
-      return res.end(releases)
+      return res.end(await getReleasesFile(config, channel, asset, serverUrl))
     }
   }
 }

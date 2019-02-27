@@ -89,7 +89,8 @@ runTests(async () => {
       redirect,
       filename,
       release,
-      filetype
+      filetype,
+      noUnref
     }) => {
       const server = http.createServer(await requestHandler(config))
       await new Promise((resolve, reject) => server.listen(resolve))
@@ -108,8 +109,10 @@ runTests(async () => {
       const q = qEls.length ? `?${qEls.join('&')}` : ''
       const url = `http://localhost:${port}/${path}${q}`
       const result = await simpleGet(url, { redirect })
+      result.server = server
+      result.serverPort = port
 
-      server.unref()
+      if (!noUnref) server.unref()
 
       return result
     }
@@ -292,9 +295,10 @@ runTests(async () => {
         platform: 'win32',
         version: notLatest,
         redirect: true,
-        release: true
+        release: true,
+        noUnref: true
       }
-      const { data } = await getServerResponse(args)
+      const { data, server, serverPort } = await getServerResponse(args)
       const firstLine = data.split('\n')[0]
       const split = firstLine.split(' ')
       const [hash, url, size] = split
@@ -307,6 +311,13 @@ runTests(async () => {
       test(`[${type}] RELEASES url is as expected`, host, expectHost)
 
       test(`[${type}] RELEASES size is a number`, !Number.isNaN(+size))
+
+      const privUrl = url.replace(serverUrl, `http://localhost:${serverPort}`)
+      const nupkgUrl = isPublic ? url : privUrl
+      const { statusCode: code } = await simpleGet(nupkgUrl, { redirect: false })
+      server.unref()
+
+      test(`[${type}] RELEASES url responds with redirect`, code, 302)
 
       return true
     })
