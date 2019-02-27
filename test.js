@@ -6,6 +6,7 @@ const path = require('path')
 const semver = require('semver')
 const qs = require('tiny-params')
 const {
+  getConfig,
   getReleaseList,
   latestByChannel,
   requestHandler,
@@ -14,7 +15,7 @@ const {
   off
 } = require('./index')
 const repo = `doesdev/oneclick-release-test`
-const fullUrlRepo = `https://github.com/doesdev/oneclick-release-test`
+const fullUrl = `https://github.com/doesdev/oneclick-release-test`
 
 let secrets
 try {
@@ -25,14 +26,14 @@ try {
   process.exit(1)
 }
 const publicConfig = { repo, token: secrets.token }
-const fullUrlConfig = (c) => Object.assign({}, c, { repo: fullUrlRepo })
+const fullUrlConfig = (c) => getConfig(Object.assign({}, c, { repo: fullUrl }))
 
 runTests(async () => {
   start('Starting oneclick-update tests')
 
   for (const type of ['public', 'private']) {
     const isPublic = type === 'public'
-    const config = isPublic ? publicConfig : secrets
+    const config = await getConfig(isPublic ? publicConfig : secrets)
     const metaChannel = isPublic ? 'vendora' : null
     const preChannel = isPublic ? 'prerelease' : null
     const useLinux = isPublic
@@ -52,7 +53,7 @@ runTests(async () => {
     )
 
     test(`[${type}] getReleaseList strips github url from repo`,
-      Array.isArray(await getReleaseList(fullUrlConfig(config)))
+      Array.isArray(await getReleaseList(await fullUrlConfig(config)))
     )
 
     await testAsync(`[${type}] latestByChannel`, async () => {

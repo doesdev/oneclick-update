@@ -197,17 +197,22 @@ const isPrivate = async (repo, token) => {
 const initCacheForRepo = (repo) => {
   repo.lastCacheRefresh = Date.now()
   repo.resetCache = () => initCacheForRepo(repo)
+
+  delete repo.releases
+  delete repo.channels
+
   repo.cache = {
     channel: {},
     platform: {},
     serverUrl: {},
     version: {},
+    platformAsset: {},
     releaseFile: {}
   }
 }
 
 const getConfig = async (configIn = {}) => {
-  if (repos[configIn.repos]) return configIn
+  if (repos[configIn.repo]) return configIn
 
   const config = Object.assign({}, configIn)
   const intvl = (config.refreshCache || REFRESH_CACHE || '').toString().trim()
@@ -244,12 +249,6 @@ const getConfig = async (configIn = {}) => {
 }
 
 const getReleaseList = async (config) => {
-  try {
-    config = await getConfig(config)
-  } catch (ex) {
-    return Promise.reject(ex)
-  }
-
   const { repo, token } = config
   const rlsUrl = `${apiBaseUrl(repo)}/releases`
   const headers = ghHeader(token)
@@ -257,22 +256,14 @@ const getReleaseList = async (config) => {
 
   if (error) return Promise.reject(error)
 
-  repos[repo].releases = releases.filter((r) => !r.draft)
-
-  return Promise.resolve(repos[repo].releases)
+  return releases.filter((r) => !r.draft)
 }
 
 const latestByChannel = async (config) => {
-  try {
-    config = await getConfig(config)
-  } catch (ex) {
-    return Promise.reject(ex)
-  }
+  const repo = repos[config.repo]
 
-  const { repo } = config
-
-  const releases = repos[repo].releases || await getReleaseList(config)
-  const channels = repos[repo].channels = repos[repo].channels || {}
+  const releases = repo.releases = repo.releases || await getReleaseList(config)
+  const channels = repo.channels = repo.channels || {}
 
   const setLatestForChannel = (release, channel) => {
     release.channel = channel = channel.toLowerCase()
@@ -313,7 +304,7 @@ const getChannel = (repo, channels, pathLower, hostConfig = {}) => {
   const cached = repo.cache.channel[cacheKey]
   if (cached) return cached
 
-  let channel = channels[hostConfig.name]
+  let channel = hostConfig.name ? channels[hostConfig.name] : null
 
   if (!channel) {
     Object.entries(channels).forEach(([channelName, release]) => {
@@ -470,8 +461,12 @@ const getPlatformAsset = (config, channel, platform, action, query) => {
   const arch = query.arch
   const ext = query.filetype
   const file = query.filename
+  const repo = repos[config.repo]
+  const key = [channel.tag_name, action, platform, arch, ext, file].join(':')
+  const cached = repo.cache.platformAsset[key]
 
-  // const cached = repo.cache.platformAsset[pathLower]
+  if (cached) return cached
+
   const assets = channel.assets.slice(0)
   const nativePlatform = platformFilters[platform]
   const userPlatform = config.platformFilters[platform]
@@ -486,6 +481,8 @@ const getPlatformAsset = (config, channel, platform, action, query) => {
   }
 
   asset = asset || (nativePlatform || (() => {}))(assets, action, arch, ext)
+
+  repo.cache.platformAsset[key] = asset
 
   return asset
 }
@@ -522,12 +519,6 @@ const getReleasesFile = async (config, channel, asset, serverUrl) => {
 }
 
 const requestHandler = async (config) => {
-  try {
-    config = await getConfig(config)
-  } catch (ex) {
-    return Promise.reject(ex)
-  }
-
   const repo = repos[config.repo]
 
   return async (req, res) => {
@@ -638,6 +629,7 @@ const requestHandler = async (config) => {
 }
 
 module.exports = {
+  getConfig,
   getReleaseList,
   latestByChannel,
   requestHandler,
