@@ -33,7 +33,7 @@ runTests(async () => {
   for (const type of ['public', 'private']) {
     const isPublic = type === 'public'
     const config = isPublic ? publicConfig : secrets
-    const metaChannel = isPublic ? 'vendor-a' : null
+    const metaChannel = isPublic ? 'vendora' : null
     const preChannel = isPublic ? 'prerelease' : null
     const useLinux = isPublic
     const usePlatformFilters = !isPublic
@@ -121,13 +121,14 @@ runTests(async () => {
       platform,
       ext,
       expectNoContent,
-      forceExt
+      forceExt,
+      channel
     ) => {
       const host = isPublic ? 'github.com' : 'amazonaws.com'
       const action = 'download'
       const redirect = false
       const filetype = forceExt ? ext : null
-      const args = { action, platform, redirect, filetype }
+      const args = { action, platform, redirect, filetype, channel }
       const result = await getServerResponse(args)
       const location = result.headers.location
 
@@ -191,6 +192,12 @@ runTests(async () => {
 
       await testAsync(`[${type}] requestHandler download/linux as rpm`, () => {
         return testPlatformDownload('linux', 'rpm', null, true)
+      })
+    }
+
+    if (metaChannel) {
+      await testAsync(`[${type}] requestHandler download/${metaChannel}/darwin`, () => {
+        return testPlatformDownload('darwin', 'dmg', null, null, metaChannel)
       })
     }
 

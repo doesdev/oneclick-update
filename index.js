@@ -308,22 +308,26 @@ const guessPlatform = (ua = '') => {
   return null
 }
 
-const getChannel = (repo, channels, pathLower) => {
-  const cached = repo.cache.channel[pathLower]
+const getChannel = (repo, channels, pathLower, hostConfig = {}) => {
+  const cacheKey = `${hostConfig.name || ''}:${pathLower}`
+  const cached = repo.cache.channel[cacheKey]
   if (cached) return cached
 
-  let channel
-  Object.entries(channels).forEach(([channelName, release]) => {
-    if (!channelName || pathLower.indexOf(channelName) === -1) return
-    if (!channel) return (channel = release)
+  let channel = channels[hostConfig.name]
 
-    const slashLen = (name) => name.split('/').length
-    const useCurrent = slashLen(channel.channel) > slashLen(channelName)
-    channel = useCurrent ? channel : release
-  })
+  if (!channel) {
+    Object.entries(channels).forEach(([channelName, release]) => {
+      if (!channelName || pathLower.indexOf(channelName) === -1) return
+      if (!channel) return (channel = release)
+
+      const slashLen = (name) => name.split('/').length
+      const useCurrent = slashLen(channel.channel) > slashLen(channelName)
+      channel = useCurrent ? channel : release
+    })
+  }
 
   channel = channel || channels['']
-  repo.cache.channel[pathLower] = channel
+  repo.cache.channel[cacheKey] = channel
 
   return channel
 }
@@ -331,11 +335,13 @@ const getChannel = (repo, channels, pathLower) => {
 const getPlatform = (config, path, channel, action, headers) => {
   const useCache = action !== 'download'
   const repo = repos[config.repo]
-  const cached = useCache ? repo.cache.platform[path] : null
+  const cacheKey = `${channel.channel || ''}:${path}`
+  const cached = useCache ? repo.cache.platform[cacheKey] : null
 
   if (cached) return cached
 
-  const ch = channel.channel ? `/${channel.channel}` : ''
+  const chInPath = channel.channel && path.indexOf(channel.channel) !== -1
+  const ch = chInPath ? `/${channel.channel}` : ''
   const cut = `/${action === 'release' ? 'update' : action}${ch}`
   const tmpPath = path.indexOf(cut) ? path : path.slice(cut.length + 1)
   const customPlatforms = Object.keys(config.platformFilters)
@@ -343,7 +349,7 @@ const getPlatform = (config, path, channel, action, headers) => {
   const pathPlatform = valid(tmpPath.split('/')[0])
   const platform = pathPlatform || guessPlatform(headers['user-agent'])
 
-  if (pathPlatform && useCache) repo.cache.platform[path] = platform
+  if (pathPlatform && useCache) repo.cache.platform[cacheKey] = platform
 
   return platform
 }
@@ -525,7 +531,9 @@ const requestHandler = async (config) => {
   const repo = repos[config.repo]
 
   return async (req, res) => {
-    let { serverUrl } = config
+    const hostConfig = config.hostToChannel[req.headers.host] || {}
+    let serverUrl = hostConfig.serverUrl || config.serverUrl
+
     const { headers } = req
     const query = parseQs(req.url)
     const [path] = (req.url.length < 2 ? '/download' : req.url).split('?')
@@ -541,9 +549,6 @@ const requestHandler = async (config) => {
 
     const nextRefresh = repo.lastCacheRefresh + config.refreshCache
     if (nextRefresh < Date.now()) repo.resetCache()
-
-    const hostConfig = config.hostToChannel[req.headers.host] || {}
-    serverUrl = hostConfig.serverUrl || serverUrl
 
     if (repo.private && !serverUrl) {
       serverUrl = getServerUrl(repo, pathLower, req)
@@ -562,8 +567,7 @@ const requestHandler = async (config) => {
 
     const channels = await latestByChannel(config)
 
-    const hostChannel = channels[hostConfig.name]
-    const channel = hostChannel || getChannel(repo, channels, pathLower)
+    const channel = getChannel(repo, channels, pathLower, hostConfig)
 
     if (!channel) return finish(null, true)
 
