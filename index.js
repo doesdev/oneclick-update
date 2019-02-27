@@ -519,6 +519,12 @@ const getReleasesFile = async (config, channel, asset, serverUrl) => {
 }
 
 const requestHandler = async (config) => {
+  try {
+    config = await getConfig(config)
+  } catch (ex) {
+    return Promise.reject(ex)
+  }
+
   const repo = repos[config.repo]
 
   return async (req, res) => {
