@@ -1,6 +1,6 @@
 'use strict'
 
-const { runTests, start, finish, test, testAsync } = require('mvt')
+const { runTests, test, testAsync } = require('mvt')
 const http = require('http')
 const path = require('path')
 const semver = require('semver')
@@ -28,9 +28,7 @@ try {
 const publicConfig = { repo, token: secrets.token }
 const fullUrlConfig = (c) => getConfig(Object.assign({}, c, { repo: fullUrl }))
 
-runTests(async () => {
-  start('Starting oneclick-update tests')
-
+runTests('Starting oneclick-update tests', async () => {
   for (const type of ['public', 'private']) {
     const isPublic = type === 'public'
     const config = await getConfig(isPublic ? publicConfig : secrets)
@@ -330,6 +328,4 @@ runTests(async () => {
       return true
     })
   }
-
-  finish()
 })
