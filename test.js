@@ -101,7 +101,7 @@ runTests('Starting oneclick-update tests', async () => {
         version,
         release ? 'RELEASES' : null
       ].filter((v) => v).join('/')
-      let qEls = [
+      const qEls = [
         filename ? `filename=${filename}` : null,
         filetype ? `filetype=${filetype}` : null
       ].filter((v) => v)

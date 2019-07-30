@@ -36,8 +36,8 @@
   "dependencies": {},
   "devDependencies": {
     "mvt": "^3.0.0",
-    "semver": "^6.1.1",
-    "standard": "^12.0.1",
+    "semver": "^6.3.0",
+    "standard": "^13.1.0",
     "tiny-params": "^4.0.0"
   }
 }

@@ -18,7 +18,7 @@ const parseQs = (url) => {
   if (!url) return {}
   const qIdx = url.indexOf('?')
   if (qIdx === -1) return {}
-  let q = url.slice(qIdx + 1)
+  const q = url.slice(qIdx + 1)
   if (!q) return {}
   const obj = {}
   const ary = q.split('&')
@@ -618,7 +618,7 @@ const requestHandler = async (config) => {
       let url = asset.browser_download_url
 
       if (repo.private) {
-        let ch = channel.channel ? `/${channel.channel}` : ''
+        const ch = channel.channel ? `/${channel.channel}` : ''
         const qs = platform === 'darwin' ? `?filetype=zip` : ''
         url = `${serverUrl}/download${ch}/${platform}${qs}`
       }
