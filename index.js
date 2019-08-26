@@ -1,6 +1,6 @@
 'use strict'
 
-const userAgent = `oneclick-update`
+const userAgent = 'oneclick-update'
 const { get: httpGet, createServer } = require('http')
 const { get: httpsGet } = require('https')
 const repos = {}
@@ -40,10 +40,10 @@ const picoMs = (str) => {
 }
 
 const semverRgx = new RegExp(
-  `^v?(?<major>0|[1-9]\\d*)\\.(?<minor>0|[1-9]\\d*)\\.(?<patch>0|[1-9]\\d*)` +
-  `(?:-(?<prerelease>(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.` +
-  `(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+(?<buildmetadata>` +
-  `[0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$`
+  '^v?(?<major>0|[1-9]\\d*)\\.(?<minor>0|[1-9]\\d*)\\.(?<patch>0|[1-9]\\d*)' +
+  '(?:-(?<prerelease>(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.' +
+  '(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+(?<buildmetadata>' +
+  '[0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$'
 )
 
 const tagCache = {}
@@ -119,11 +119,11 @@ const {
 } = process.env
 
 const contentType = {
-  ghJson: `application/vnd.github.v3+json`,
-  octet: `application/octet-stream`
+  ghJson: 'application/vnd.github.v3+json',
+  octet: 'application/octet-stream'
 }
 
-const ghHeader = (token, accept = `ghJson`) => {
+const ghHeader = (token, accept = 'ghJson') => {
   const header = { 'User-Agent': userAgent, Accept: contentType[accept] }
 
   if (token) header.Authorization = `token ${token}`
@@ -225,7 +225,7 @@ const getConfig = async (configIn = {}) => {
   config.platformFilters = config.platformFilters || {}
   config.hostToChannel = config.hostToChannel || {}
 
-  if (!config.repo) throw new Error(`Repo is required`)
+  if (!config.repo) throw new Error('Repo is required')
 
   if (config.repo.indexOf('github.com/') !== -1) {
     config.repo = config.repo.replace(/.*github.com\//, '')
@@ -237,11 +237,11 @@ const getConfig = async (configIn = {}) => {
   initCacheForRepo(repos[config.repo])
 
   if (repos[config.repo].private && !config.serverUrl) {
-    let msg = `\nFor private repos we recommend setting serverUrl / SERVER_URL\n`
-    msg += ` - If not set we will try to extract that info from each request\n`
-    msg += ` - That isn't guaranteed to produce the correct return URL\n`
-    msg += ` - That also adds overhead to each request\n`
-    msg += ` - HTTPS is assumed unless running on port 80\n`
+    let msg = '\nFor private repos we recommend setting serverUrl / SERVER_URL\n'
+    msg += ' - If not set we will try to extract that info from each request\n'
+    msg += ' - That isn\'t guaranteed to produce the correct return URL\n'
+    msg += ' - That also adds overhead to each request\n'
+    msg += ' - HTTPS is assumed unless running on port 80\n'
     console.log(msg)
   }
 
@@ -281,7 +281,7 @@ const latestByChannel = async (config) => {
     const tagMeta = tag.indexOf('+') >= 0 ? tag.slice(tag.indexOf('+') + 1) : ''
     const tagPreAry = semver.prerelease || []
     const tagPre = tagPreAry.find((p) => Number.isNaN(+p))
-    const rlsPre = r.prerelease ? `prerelease` : null
+    const rlsPre = r.prerelease ? 'prerelease' : null
 
     const channel = filterJoin([tagMeta, tagPre, rlsPre], '/')
     setLatestForChannel(r, channel)
@@ -619,7 +619,7 @@ const requestHandler = async (config) => {
 
       if (repo.private) {
         const ch = channel.channel ? `/${channel.channel}` : ''
-        const qs = platform === 'darwin' ? `?filetype=zip` : ''
+        const qs = platform === 'darwin' ? '?filetype=zip' : ''
         url = `${serverUrl}/download${ch}/${platform}${qs}`
       }
 

@@ -14,14 +14,14 @@ const {
   on,
   off
 } = require('./index')
-const repo = `doesdev/oneclick-release-test`
-const fullUrl = `https://github.com/doesdev/oneclick-release-test`
+const repo = 'doesdev/oneclick-release-test'
+const fullUrl = 'https://github.com/doesdev/oneclick-release-test'
 
 let secrets
 try {
   secrets = require('./secrets.json')
 } catch (ex) {
-  const err = `Tests require secrets.json file with private repo and token`
+  const err = 'Tests require secrets.json file with private repo and token'
   console.error(err)
   process.exit(1)
 }
